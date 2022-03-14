@@ -1,0 +1,2 @@
+# InteractiveSeg
+Minimally Interactive Segmentation
