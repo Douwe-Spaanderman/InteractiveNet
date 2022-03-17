@@ -8,11 +8,13 @@ import SimpleITK as sitk
 import numpy as np
 from pathlib import Path
 from scipy import ndimage
-from skimage import morphology
 from visualization import myshow3d
 
 class MaskItem():
     def __init__(self, Mask, Image):
+        self.MaskName = Mask.name
+        self.ImageName = Image.name
+        self.AnnotationName = Image.stem.split("_")
         self.Mask = self._from_simpleITK(self._read_Image(Mask))
         self.Image = self._read_Image(Image)
         self.Center = ndimage.center_of_mass(self.Mask)
@@ -30,6 +32,13 @@ class MaskItem():
         self.ChangedMask = np.copy(self.Mask)
         self.ShowMask = np.copy(self.Mask)
 
+        # Create new annotation name
+        if len(self.AnnotationName) > 2:
+            self.AnnotationName = '_'.join(self.AnnotationName[1:])
+        else: 
+            self.AnnotationName = self.AnnotationName[-1]
+        self.AnnotationName = "annotation_" + self.AnnotationName + ".nii.gz"
+
     def _from_simpleITK(self, img):
         if img is not None:
             return sitk.GetArrayFromImage(img)
@@ -44,7 +53,7 @@ class MaskItem():
 
     def _read_Image(self, img):
         if img:
-            return sitk.ReadImage(img, imageIO="NiftiImageIO")
+            return sitk.ReadImage(str(img), imageIO="NiftiImageIO")
 
     def _save_Image(self, img, name):
         if img:
@@ -85,15 +94,6 @@ class MaskItem():
         matrix = np.copy(self.ChangedMask)
         matrix = ndimage.binary_dilation(matrix, iterations=iterations).astype(matrix.dtype)
         self.ChangedMask = matrix - self.ChangedMask
-        self.inds_z, self.inds_y, self.inds_x = np.where(self.ChangedMask > 0.5)
-
-    def remove_noise(self) -> None:
-        nda = np.copy(self.ChangedMask)
-        for i, mask in enumerate([nda[s,:,:] for s in range(nda.shape[0])]):
-            mask = mask.astype('int')
-            mask = morphology.area_closing(mask)
-            self.ChangedMask[i,:,:] = morphology.remove_small_objects(mask.astype('bool'))
-
         self.inds_z, self.inds_y, self.inds_x = np.where(self.ChangedMask > 0.5)
 
     def get_bbox(self, pad=0) -> None:
@@ -226,19 +226,16 @@ class MaskItem():
     def show(self, overlap=None, xslices=[], yslices=[], zslices=[], enlarge=10, title=None, margin=0.05, dpi=300, show=True, save=None, gif=False) -> None:
         myshow3d(self.ShowMask, self.Image, overlap, xslices, yslices, zslices, enlarge, title, margin, dpi, show, save, gif)
 
-    def save(self, location) -> None:
-        self._save_Image(self._to_simpleITK(self.Mask), str(location / "masks.nii.gz"))
-        self._save_Image(self._to_simpleITK(self.Image), str(location / "image.nii.gz"))
-        self._save_Image(self._to_simpleITK(self.NewMask), str(location / "points.nii.gz"))
+    def save(self, location, mode) -> None:
+        self._save_Image(self._to_simpleITK(self.Mask), str(location / f"labels{mode}" / self.MaskName))
+        self._save_Image(self._to_simpleITK(self.Image), str(location / f"images{mode}" / self.ImageName))
+        self._save_Image(self._to_simpleITK(self.NewMask), str(location / f"interaction{mode}" / self.AnnotationName))
 
         # Uncomment processed mask for dev
         #self._save_Image(self._to_simpleITK(self.ChangedMask), str(location / "processed_mask.nii.gz"))
 
-def create_sample(input_mask, input_image=None, border=None, remove_noise=None, extreme_points=None, random_points=None, scribble=False, save=None, plot=None, gif=False):
+def create_sample(input_mask, input_image=None, border=None, extreme_points=None, random_points=None, scribble=False, mode="Tr", save=None, plot=None, gif=False):
     data = MaskItem(input_mask, input_image)
-    
-    if remove_noise:
-        data.remove_noise() 
 
     data.get_bbox(pad=[1,3,3])
 
@@ -255,9 +252,11 @@ def create_sample(input_mask, input_image=None, border=None, remove_noise=None, 
     newmask = data.combine_to_map(overlap)
     # Saving data
     if save:
-        save = save / input_mask.split("/")[-2]
-        save.mkdir(parents=True, exist_ok=True)
-        data.save(save)
+        for folder in [f"images{mode}", f"interaction{mode}", f"labels{mode}"]:
+            tmp = save / folder
+            tmp.mkdir(parents=True, exist_ok=True)
+
+        data.save(save, mode=mode)
     
     if plot and save:
         newmask = data.crop_from_bbox()
@@ -286,7 +285,7 @@ def create_sample(input_mask, input_image=None, border=None, remove_noise=None, 
 
 def main():
     parser = argparse.ArgumentParser(
-		description="Change the format of data folders to nnUNet"
+		description="Create annotations from masks, in order to do minimally interactive segmentation experiments"
 		)
     parser.add_argument(
         "-i",
@@ -315,13 +314,6 @@ def main():
         nargs="?",
         default=None,
         help="Do you want to look in the border only"
-        )
-    parser.add_argument(
-        "-r",
-        "--remove_noise",
-        nargs="?",
-        default=None,
-        help="Do you want to remove noise of islands (please provide int)"
         )
     parser.add_argument(
         "-e",
@@ -363,26 +355,31 @@ def main():
     # This is stupid but whatever
     if args.extreme_points and len(args.extreme_points) != 3:
         raise KeyError(f"argument extreme_points (-e) should either be None or a list of 3 not: {args.extreme_points}")
-
-    folders = [f for f in Path(args.inpath).iterdir() if f.is_dir()]
+    
     output_folder = Path(args.outpath, args.name)
-    for folder in folders:
-        create_sample(
-            input_mask = str(folder / f"{args.mask_name}.nii.gz"),
-            input_image = str(folder / "image.nii.gz"),
-            border = args.border,
-            remove_noise = args.remove_noise,
-            extreme_points = args.extreme_points,
-            random_points = args.random_points,
-            scribble=False,
-            save = output_folder,
-            plot = args.plot,
-            gif = args.gif,
-        )
+    Dataset_numb = 0
+    for mode in ["Tr", "Ts"]:
+        labels = sorted([f for f in Path(args.inpath, "labels" + mode).glob('**/*') if f.is_file()])
+        images = sorted([f for f in Path(args.inpath, "images" + mode).glob('**/*') if f.is_file()])
+
+        for label, image in zip(labels, images):
+            create_sample(
+                input_mask = label,
+                input_image = image,
+                border = args.border,
+                extreme_points = args.extreme_points,
+                random_points = args.random_points,
+                scribble=False,
+                mode = mode,
+                save = output_folder,
+                plot = args.plot,
+                gif = args.gif,
+            )
+
+        Dataset_numb += len(images)
 
     if output_folder:
         Dataset_name = Path(args.inpath).name
-        Dataset_numb = len(folders)
         with open(str(output_folder / 'metadata.json'), 'w') as f:
             json.dump({
                 "Info" : "Metadata for scribble/point minimal interactive segmentation. Point have been drawn automatically using the mask of the image",
@@ -397,7 +394,6 @@ def main():
                 },
                 "Arguments" : {
                     "border" : f"{args.border}",
-                    "remove_noise" : f"{args.remove_noise}",
                     "extreme_points": f"{args.extreme_points}",
                     "random_points": f"{args.random_points}",
                     "plot": f"{args.plot}",
@@ -405,7 +401,6 @@ def main():
                 },
                 "Explanation" : {
                     "border" : f"If not None, all points have been drawn from the border. Otherwise the can be drawn from anywhere in the mask",
-                    "remove_noise" : f"If not None, islands have been removed using erosion-dilation operation. This is used to reduce noise from random points drawn from island (of which I am unsure why they are there) in the mask. Number provided will be used for the number of iterations in erosion-dilation, i.e. the larger this number, the more islands are removed",
                     "extreme_points": f"If not None, extreme points are found for the mask, which in a 3D image are 6 points, i.e. two extremes for each axis. Also the list provided, e.g. [1,3,3] ([z,y,x]), specifies the relaxtion to the middle of the extreme points. This can be done in order to mimic errors from the clinicians, i.e. they won't find the optimal extreme points",
                     "random_points": f"If not None, random points are drawn from the mask or border (see argument border). Will be type(int) specifying the number of random points drawn",
                     "plot": f"If not None, this means that images are saved",
