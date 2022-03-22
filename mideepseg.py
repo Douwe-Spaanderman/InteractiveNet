@@ -33,7 +33,7 @@ from monai.networks.nets import DynUNet
 from monai.metrics import DiceMetric
 from monai.losses import DiceCELoss
 from monai.inferers import sliding_window_inference
-from monai.data import CacheDataset, decollate_batch
+from monai.data import CacheDataset, DataLoader, decollate_batch
 
 from transforms import PreprocessAnisotropic, EGDMapd, BoudingBoxd
 
@@ -78,7 +78,7 @@ class Net(pl.LightningModule):
             act_name = 'PRELU',
             deep_supervision = False,
         )
-                
+
         self.loss_function = DiceCELoss(to_onehot_y=True, softmax=True)
         self.dice_metric = DiceMetric(include_background=False, reduction="mean", get_not_nans=False)
         self.post_pred = AsDiscrete(argmax=True, to_onehot=2)
@@ -86,7 +86,8 @@ class Net(pl.LightningModule):
         self.best_val_dice = 0
         self.best_val_epoch = 0
         self.data_dir = data_dir
-        
+        self.max_epochs = 3000
+
     def forward(self, x):
         return self._model(x)
 
@@ -94,15 +95,15 @@ class Net(pl.LightningModule):
         images = sorted([f for f in Path(self.data_dir, "imagesTr").glob('**/*') if f.is_file()])
         points = sorted([f for f in Path(self.data_dir, "labelsTr").glob('**/*') if f.is_file()])
         labels = sorted([f for f in Path(self.data_dir, "interactionTr").glob('**/*') if f.is_file()])
-        train_files =[ 
+        train_files =[
             {"image": image_name, "point": point_name, "label": label_name}
             for image_name, point_name, label_name in zip(images, points, labels)
             ]
 
         images = sorted([f for f in Path(self.data_dir, "imagesTs").glob('**/*') if f.is_file()])
         points = sorted([f for f in Path(self.data_dir, "labelsTs").glob('**/*') if f.is_file()])
-        labels = sorted([f for f in Path(self.data_dir, "interactionTs").glob('**/*') if f.is_file()])       
-        val_files =[ 
+        labels = sorted([f for f in Path(self.data_dir, "interactionTs").glob('**/*') if f.is_file()])
+        val_files =[
             {"image": image_name, "point": point_name, "label": label_name}
             for image_name, point_name, label_name in zip(images, points, labels)
             ]
@@ -110,9 +111,9 @@ class Net(pl.LightningModule):
         # set deterministic training for reproducibility
         set_determinism(seed=0)
 
-        train_transforms = Compose(                                              
+        train_transforms = Compose(
             [
-                LoadImaged(keys=["image", "point", "label"]),  
+                LoadImaged(keys=["image", "point", "label"]),
                 EnsureChannelFirstd(keys=["image", "point", "label"]),
                 EGDMapd(
                     keys=["point"],
@@ -129,7 +130,7 @@ class Net(pl.LightningModule):
                 ),
                 BoudingBoxd(
                     keys=["image", "point", "label"],
-                    on="point",
+                    on="label",
                     relaxation=(15, 15, 4),
                 ),
                 SpatialPadd(keys=["image", "point", "label"], spatial_size=(192, 192, 32)),
@@ -206,8 +207,8 @@ class Net(pl.LightningModule):
 
     def train_dataloader(self):
         train_loader = DataLoader(
-            self.train_ds, batch_size=2, shuffle=True,                       
-            num_workers=4,
+            self.train_ds, batch_size=2, shuffle=True,
+            num_workers=4, drop_last=True,
         )
         return train_loader
 
@@ -227,14 +228,14 @@ class Net(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         images, labels = batch["image"], batch["label"]
         output = self.forward(images)
-        loss = self.loss_function(output, labels)         
+        loss = self.loss_function(output, labels)
         self.log("loss", loss, on_epoch=True, batch_size=self.batch_size)
         return {"loss": loss, "logs": logs}
-        
+
     def training_epoch_end(self, outputs):
         # Only required for logging it to mlflow for some reason.
         self.log("lr", self.lr_scheduler["scheduler"].get_last_lr()[0])
-    
+
     def validation_step(self, batch, batch_idx):
         images, labels = batch["image"], batch["label"]
         roi_size = (192, 192, 32)
@@ -244,7 +245,8 @@ class Net(pl.LightningModule):
             roi_size,
             sw_batch_size,
             self.forward,
-            overlap=0.5
+            overlap=0.5,
+            mode="gaussian"
         )
         loss = self.loss_function(outputs, labels)
         outputs = [self.post_pred(i) for i in decollate_batch(outputs)]
@@ -261,7 +263,7 @@ class Net(pl.LightningModule):
 
         mean_val_dice = self.dice_metric.aggregate().item()
         self.dice_metric.reset()
-        mean_val_loss = torch.tensor(val_loss / num_items)         
+        mean_val_loss = torch.tensor(val_loss / num_items)
         if mean_val_dice > self.best_val_dice:
             self.best_val_dice = mean_val_dice
             self.best_val_epoch = self.current_epoch
@@ -275,21 +277,20 @@ class Net(pl.LightningModule):
         self.log("current mean dice", mean_val_dice, on_epoch=True)
         self.log("best mean dice", self.best_val_dice, on_epoch=True)
         self.log("at epoch", self.best_val_epoch, on_epoch=True)
-        return mean_val_dice, mean_val_loss 
+        return mean_val_dice, mean_val_loss
 
 if __name__=="__main__":
     lr_logger = LearningRateMonitor(logging_interval="epoch")
 
-    network = Net("data/exp/LipoMoved/")
-    
+    network = Net("/trinity/home/dspaanderman/InteractiveSeg/data/exp/LipoMoved/")
+
     trainer = pl.Trainer(
-        gpus=-1, 
-        max_epochs=3000, 
+        gpus=-1,
+        max_epochs=3000,
         num_sanity_val_steps=1,
         log_every_n_steps=50,
         check_val_every_n_epoch=1,
         precision = 16,
-        amp_backend="native",
         callbacks=[lr_logger],
     )
 

@@ -172,7 +172,7 @@ class PreprocessAnisotropic(MapTransform):
             image = resample_image(image, resample_shape, anisotrophy_flag)
             point = resample_image(point, resample_shape, anisotrophy_flag)
 
-            
+
             if "label" in self.keys:
                 label = resample_label(label, resample_shape, anisotrophy_flag)
 
@@ -236,7 +236,7 @@ class EGDMapd(MapTransform):
                     GD = GeodisTK.geodesic3d_raster_scan(d[self.image][idx].astype(np.float32), d[key][idx].astype(np.uint8), d[f'{self.image}_meta_dict']["dim"][1:4], self.lamb, self.iter)
                     d[key][idx, :, :, :] = np.exp(-GD)
             else:
-                GD = GeodisTK.geodesic3d_raster_scan(d[self.image].astype(np.float32), d[key].astype(np.uint8), d[f'{self.image}_meta_dict']["dim"][1:4], self.lamb, self.iter) 
+                GD = GeodisTK.geodesic3d_raster_scan(d[self.image].astype(np.float32), d[key].astype(np.uint8), d[f'{self.image}_meta_dict']["dim"][1:4], self.lamb, self.iter)
                 d[key] = np.exp(-GD)
 
         return d
@@ -300,17 +300,17 @@ class BoudingBoxd(MapTransform):
                 raise TypeError("All items in data must have the same type.")
             output.append(d[key])
 
-        bbox = self.calculate_bbox(d[self.on])
-
         for key in self.keys:
             if len(d[key].shape) == 4:
                 print(d[key].shape)
                 new_dkey = []
+                bbox = self.calculate_bbox(d[self.on][0])
                 for idx in range(d[key].shape[0]):
                     new_dkey.append(self.extract_bbox_region(d[key][idx], bbox))
                 d[key] = np.stack(new_dkey, axis=0)
                 print(d[key].shape)
             else:
+                bbox = self.calculate_bbox(d[self.on][0])
                 d[key] = self.extract_bbox_region(d[key], bbox)
 
         return d
