@@ -93,16 +93,16 @@ class Net(pl.LightningModule):
 
     def prepare_data(self):
         images = sorted([f for f in Path(self.data_dir, "imagesTr").glob('**/*') if f.is_file()])
-        points = sorted([f for f in Path(self.data_dir, "labelsTr").glob('**/*') if f.is_file()])
-        labels = sorted([f for f in Path(self.data_dir, "interactionTr").glob('**/*') if f.is_file()])
+        labels = sorted([f for f in Path(self.data_dir, "labelsTr").glob('**/*') if f.is_file()])
+        points = sorted([f for f in Path(self.data_dir, "interactionTr").glob('**/*') if f.is_file()])
         train_files =[
             {"image": image_name, "point": point_name, "label": label_name}
             for image_name, point_name, label_name in zip(images, points, labels)
             ]
 
         images = sorted([f for f in Path(self.data_dir, "imagesTs").glob('**/*') if f.is_file()])
-        points = sorted([f for f in Path(self.data_dir, "labelsTs").glob('**/*') if f.is_file()])
-        labels = sorted([f for f in Path(self.data_dir, "interactionTs").glob('**/*') if f.is_file()])
+        labels = sorted([f for f in Path(self.data_dir, "labelsTs").glob('**/*') if f.is_file()])
+        points = sorted([f for f in Path(self.data_dir, "interactionTs").glob('**/*') if f.is_file()])
         val_files =[
             {"image": image_name, "point": point_name, "label": label_name}
             for image_name, point_name, label_name in zip(images, points, labels)
@@ -115,34 +115,25 @@ class Net(pl.LightningModule):
             [
                 LoadImaged(keys=["image", "point", "label"]),
                 EnsureChannelFirstd(keys=["image", "point", "label"]),
+                Resamplingd(
+                    keys=["image", "point", "label"],
+                    pixdim=(0.69097221, 0.69097221, 3.59999912),
+                ),
+                BoudingBoxd(
+                    keys=["image", "point", "label"],
+                    on="point",
+                    relaxation=(15, 15, 4),
+                ),
+                NormalizeIntensityd(
+                    keys=["image"],
+                    nonzero=True,
+                    channel_wise=False,
+                ),
                 EGDMapd(
                     keys=["point"],
                     image="image",
                     lamb=1,
                     iter=4,
-                ),
-                PreprocessAnisotropic(
-                    keys=["image", "point", "label"],
-                    clip_values=(0, 0),
-                    pixdim=(0.69097221, 0.69097221, 3.59999912),
-                    normalize_values=(0, 0),
-                    model_mode="train",
-                ),
-                BoudingBoxd(
-                    keys=["image", "point", "label"],
-                    on="label",
-                    relaxation=(15, 15, 4),
-                ),
-                SpatialPadd(keys=["image", "point", "label"], spatial_size=(192, 192, 32)),
-                RandCropByPosNegLabeld(
-                    keys=["image", "point", "label"],
-                    label_key="label",
-                    spatial_size=(192, 192, 32),
-                    pos=1,
-                    neg=1,
-                    num_samples=1,
-                    image_key="image",
-                    image_threshold=0,
                 ),
                 RandZoomd(
                     keys=["image", "point", "label"],
@@ -167,31 +158,32 @@ class Net(pl.LightningModule):
                 CastToTyped(keys=["image", "point", "label"], dtype=(np.float32, np.float32, np.uint8)),
                 ConcatItemsd(keys=["image", "point"], name="image"),
                 ToTensord(keys=["image", "label"]),
-            ]
+                ]
         )
         val_transforms = Compose(
             [
                 LoadImaged(keys=["image", "point", "label"]),
                 EnsureChannelFirstd(keys=["image", "point", "label"]),
+                Resamplingd(
+                    keys=["image", "point", "label"],
+                    pixdim=(0.69097221, 0.69097221, 3.59999912),
+                ),
+                BoudingBoxd(
+                    keys=["image", "point", "label"],
+                    on="point",
+                    relaxation=(15, 15, 4),
+                ),
+                NormalizeIntensityd(
+                    keys=["image"],
+                    nonzero=True,
+                    channel_wise=False,
+                ),
                 EGDMapd(
                     keys=["point"],
                     image="image",
                     lamb=1,
                     iter=4,
                 ),
-                PreprocessAnisotropic(
-                    keys=["image", "point", "label"],
-                    clip_values=(0, 0),
-                    pixdim=(0.69097221, 0.69097221, 3.59999912),
-                    normalize_values=(0, 0),
-                    model_mode="test",
-                ),
-                BoudingBoxd(
-                    keys=["image", "point", "label"],
-                    on="label",
-                    relaxation=(10, 10, 2),
-                ),
-                SpatialPadd(keys=["image", "point", "label"], spatial_size=(192, 192, 32)),
                 CastToTyped(keys=["image", "point", "label"], dtype=(np.float32, np.float32, np.uint8)),
                 ConcatItemsd(keys=["image", "point"], name="image"),
                 ToTensord(keys=["image", "label"]),

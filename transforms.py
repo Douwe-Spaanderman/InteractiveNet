@@ -1,10 +1,9 @@
 from monai.transforms.transform import MapTransform
-from monai.transforms import (
-    NormalizeIntensity,
-)
 from skimage.transform import resize
 import numpy as np
 import GeodisTK
+from nibabel import affines
+import numpy.linalg as npl
 
 def resample_label(label, shape, anisotrophy_flag):
     reshaped = np.zeros(shape, dtype=np.uint8)
@@ -99,7 +98,31 @@ def resample_image(image, shape, anisotrophy_flag):
     resized = np.stack(resized_channels, axis=0)
     return resized
 
-class PreprocessAnisotropic(MapTransform):
+def resample_point(image, affine, new_spacing, shape):
+    resized_channels = []
+    for image_d in image:
+        resized = np.zeros(shape)
+        new_affine = affines.rescale_affine(affine, image_d.shape, new_spacing, new_shape=shape)
+        
+        inds_x, inds_y, inds_z = np.where(image_d > 0.5)
+        for i, j, k in zip(inds_x, inds_y, inds_z):
+            old_vox2new_vox = npl.inv(new_affine).dot(affine)
+            new_point = np.rint(affines.apply_affine(old_vox2new_vox, [i, j, k])).astype(int)
+        
+            for i in range(len(new_point)):
+                if new_point[i] < 0:
+                    new_point[i] = 0
+                elif new_point[i] >= shape[i]:
+                    new_point[i] = shape[i] - 1 
+
+            resized[new_point[0], new_point[1], new_point[2]] = 1
+        
+        resized_channels.append(resized)
+        
+    resized = np.stack(resized_channels, axis=0)
+    return resized
+
+class Resamplingd(MapTransform):
     """
         This transform class takes NNUNet's preprocessing method for reference.
         That code is in:
@@ -109,25 +132,13 @@ class PreprocessAnisotropic(MapTransform):
     def __init__(
         self,
         keys,
-        clip_values,
         pixdim,
-        normalize_values,
-        model_mode,
     ) -> None:
         super().__init__(keys)
         self.keys = keys
-        self.low = clip_values[0]
-        self.high = clip_values[1]
         self.target_spacing = pixdim
-        self.mean = normalize_values[0]
-        self.std = normalize_values[1]
-        self.training = False
-        self.normalize_intensity = NormalizeIntensity(nonzero=True, channel_wise=True)
-        if model_mode in ["train"]:
-            self.training = True
 
-    def calculate_new_shape(self, spacing, shape):
-        spacing_ratio = np.array(spacing) / np.array(self.target_spacing)
+    def calculate_new_shape(self, spacing_ratio, shape):
         new_shape = (spacing_ratio * np.array(shape)).astype(int).tolist()
         return new_shape
 
@@ -136,6 +147,19 @@ class PreprocessAnisotropic(MapTransform):
             return np.max(spacing) / np.min(spacing) >= 3
 
         return check(spacing) or check(self.target_spacing)
+
+    def sanity_in_mask(self, point, label):
+        sanity = []
+        for i, point_d in enumerate(point):
+            label_d = label[i]
+            idx_x, idx_y, idx_z = np.where(point_d > 0.5)
+            sanity_d = []
+            for x, y, z in zip(idx_x, idx_y, idx_z):
+                sanity_d.append(label_d[x, y, z] == 1)
+
+            sanity.append(not any(sanity_d))
+
+        return not any(sanity)
 
     def __call__(self, data):
         # load data
@@ -148,8 +172,11 @@ class PreprocessAnisotropic(MapTransform):
 
         d = dict(data)
         image = d[image]
-        point = d[point]
         image_spacings = d[f"{nimg}_meta_dict"]["pixdim"][1:4].tolist()
+
+        if "point" in self.keys:
+            point = d["point"]
+            point[point < 0] = 0
 
         if "label" in self.keys:
             label = d["label"]
@@ -167,34 +194,41 @@ class PreprocessAnisotropic(MapTransform):
         if self.target_spacing != image_spacings:
             # resample
             resample_flag = True
-            resample_shape = self.calculate_new_shape(image_spacings, original_shape)
+            spacing_ratio = np.array(image_spacings) / np.array(self.target_spacing)
+            resample_shape = self.calculate_new_shape(spacing_ratio, original_shape)
             anisotrophy_flag = self.check_anisotrophy(image_spacings)
             image = resample_image(image, resample_shape, anisotrophy_flag)
-            point = resample_image(point, resample_shape, anisotrophy_flag)
 
-
-            if "label" in self.keys:
+            if "label" in self.keys or "seg" in self.keys:
                 label = resample_label(label, resample_shape, anisotrophy_flag)
 
-            if "seg" in self.keys:
-                label = resample_label(label, resample_shape, anisotrophy_flag)
+            if "point" in self.keys:
+                point = resample_point(data["point"], data['point_meta_dict']["affine"], self.target_spacing, resample_shape)
+                if "label" in self.keys or "seg" in self.keys:
+                    d["points_in_mask"] = self.sanity_in_mask(point, label)
 
         d["resample_flag"] = resample_flag
         d["anisotrophy_flag"] = anisotrophy_flag
-        # clip image for CT dataset
-        if self.low != 0 or self.high != 0:
-            image = np.clip(image, self.low, self.high)
-            image = (image - self.mean) / self.std
-        else:
-            image = self.normalize_intensity(image.copy())
+
+        new_meta = {
+            "new_spacing": np.array(self.target_spacing),
+            "new_dim": np.array(resample_shape)
+        }
 
         d[f"{nimg}"] = image
+        d[f"{nimg}_meta_dict"].update(new_meta)
+
+        if "point" in self.keys:
+            d["point"] = point
+            d["point_meta_dict"].update(new_meta)
 
         if "label" in self.keys:
             d["label"] = label
+            d["label_meta_dict"].update(new_meta)
 
-        if "seg" in self.keys:
+        elif "seg" in self.keys:
             d["seg"] = label
+            d["seg_meta_dict"].update(new_meta)
 
         return d
 
@@ -233,14 +267,13 @@ class EGDMapd(MapTransform):
         for key in self.keys:
             if len(d[key].shape) == 4:
                 for idx in range(d[key].shape[0]):
-                    GD = GeodisTK.geodesic3d_raster_scan(d[self.image][idx].astype(np.float32), d[key][idx].astype(np.uint8), d[f'{self.image}_meta_dict']["dim"][1:4], self.lamb, self.iter)
+                    GD = GeodisTK.geodesic3d_raster_scan(d[self.image][idx].astype(np.float32), d[key][idx].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
                     d[key][idx, :, :, :] = np.exp(-GD)
             else:
-                GD = GeodisTK.geodesic3d_raster_scan(d[self.image].astype(np.float32), d[key].astype(np.uint8), d[f'{self.image}_meta_dict']["dim"][1:4], self.lamb, self.iter)
+                GD = GeodisTK.geodesic3d_raster_scan(d[self.image].astype(np.float32), d[key].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
                 d[key] = np.exp(-GD)
 
         return d
-
 
 class BoudingBoxd(MapTransform):
     """
@@ -264,19 +297,26 @@ class BoudingBoxd(MapTransform):
             self.relaxation = [self.relaxation] * 3
 
     def calculate_bbox(self, data):
-        inds_z, inds_y, inds_x = np.where(data > 0.5)
+        inds_x, inds_y, inds_z = np.where(data > 0.5)
+
         bbox = np.array([
             [
-                np.min(inds_z) - self.relaxation[2],
+                np.min(inds_x) - self.relaxation[0],
                 np.min(inds_y) - self.relaxation[1],
-                np.min(inds_x) - self.relaxation[0]
+                np.min(inds_z) - self.relaxation[2]
                 ],
             [
-                np.max(inds_z) + self.relaxation[2],
+                np.max(inds_x) + self.relaxation[0],
                 np.max(inds_y) + self.relaxation[1],
-                np.max(inds_x) + self.relaxation[0]
+                np.max(inds_z) + self.relaxation[2]
             ]
         ])
+
+        # Remove below zero and higher than shape because of relaxation
+        bbox[bbox < 0] = 0
+        largest_dimension = [int(x) if  x <= data.shape[i] else data.shape[i] for i, x in enumerate(bbox[1])]
+        bbox = np.array([bbox[0].tolist(), largest_dimension])
+
         return bbox
 
     def extract_bbox_region(self, data, bbox):
@@ -300,17 +340,15 @@ class BoudingBoxd(MapTransform):
                 raise TypeError("All items in data must have the same type.")
             output.append(d[key])
 
+        bbox = self.calculate_bbox(d[self.on][0])
         for key in self.keys:
             if len(d[key].shape) == 4:
-                print(d[key].shape)
                 new_dkey = []
-                bbox = self.calculate_bbox(d[self.on][0])
                 for idx in range(d[key].shape[0]):
                     new_dkey.append(self.extract_bbox_region(d[key][idx], bbox))
                 d[key] = np.stack(new_dkey, axis=0)
-                print(d[key].shape)
+                d[f"{key}_meta_dict"]["bbox"] = d[key].size
             else:
-                bbox = self.calculate_bbox(d[self.on][0])
                 d[key] = self.extract_bbox_region(d[key], bbox)
 
         return d

@@ -16,9 +16,9 @@ def create_tile(img, xslices=[], yslices=[], zslices=[], meta_file=None):
     else:
         null_template = sitk.Image([0,0], img.GetPixelIDValue(), img.GetNumberOfComponentsPerPixel())
 
-    img_xslices = [img[s,:,:] for s in xslices]
+    img_xslices = [img[:,:,s] for s in xslices]
     img_yslices = [img[:,s,:] for s in yslices]
-    img_zslices = [img[:,:,s] for s in zslices]
+    img_zslices = [img[s,:,:] for s in zslices]
 
     maxlen = max(len(img_xslices), len(img_yslices), len(img_zslices))
 
@@ -67,10 +67,11 @@ def myshow(img, overlap=None, title=None, margin=0.05, dpi=80, titlesize=12):
             
     ysize = nda.shape[0]
     xsize = nda.shape[1]
-    
+
     # Make a figure big enough to accomodate an axis of xpixels by ypixels
     # as well as the ticklabels, etc...
-    figsize = (1 + margin) * ysize / dpi, (1 + margin) * xsize / dpi
+    enlarge = 1000 / min([ysize, xsize])
+    figsize = (1 + margin) * ysize / dpi * enlarge, (1 + margin) * xsize / dpi * enlarge
 
     fig = plt.figure(figsize=figsize, dpi=dpi)
     # Make the axis the right size...
@@ -85,8 +86,9 @@ def myshow(img, overlap=None, title=None, margin=0.05, dpi=80, titlesize=12):
 
     if overlap is not None:
         overlap = sitk.GetArrayFromImage(overlap)
+        overlap = overlap.astype(np.float32)
         overlap[overlap == 0] = np.nan
-        t2 = ax.imshow(overlap, cmap='Set1', extent=extent,interpolation=None)
+        t2 = ax.imshow(overlap, cmap='Set2', extent=extent, interpolation=None)
     
     if(title):
         plt.title(title, fontsize=titlesize)
@@ -98,11 +100,11 @@ def myshow3d(mask, image=None, overlap=None, xslices=[], yslices=[], zslices=[],
     if overlap is not None:
         # Add dilation, to create a larger dot for plotting - do this for each 2D layer as otherwise it looks weird
         slices = []
-        for i, slice_overlap in enumerate(overlap):
+        for i, slice_overlap in enumerate(overlap.T):
             #slices.append(ndimage.binary_dilation(slice_overlap, mask=mask[i,:,:], iterations=enlarge).astype(slice_overlap.dtype))
             slices.append(ndimage.binary_dilation(slice_overlap, iterations=enlarge).astype(slice_overlap.dtype))
 
-        overlap = np.stack(slices, axis=0)
+        overlap = np.stack(slices, axis=0).T
 
     if gif:
         if image is not None:
