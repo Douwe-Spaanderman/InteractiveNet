@@ -28,6 +28,7 @@ from monai.transforms import (
     RandGaussianNoised,
     RandGaussianSmoothd,
     CastToTyped,
+    NormalizeIntensityd
 )
 from monai.networks.nets import DynUNet
 from monai.metrics import DiceMetric
@@ -35,7 +36,7 @@ from monai.losses import DiceCELoss
 from monai.inferers import sliding_window_inference
 from monai.data import CacheDataset, DataLoader, decollate_batch
 
-from transforms import PreprocessAnisotropic, EGDMapd, BoudingBoxd
+from transforms import Resamplingd, EGDMapd, BoudingBoxd
 
 import torch
 import pytorch_lightning as pl
@@ -274,7 +275,8 @@ class Net(pl.LightningModule):
 if __name__=="__main__":
     lr_logger = LearningRateMonitor(logging_interval="epoch")
 
-    network = Net("/trinity/home/dspaanderman/InteractiveSeg/data/exp/LipoMoved/")
+    #network = Net("/trinity/home/dspaanderman/InteractiveSeg/data/exp/LipoMoved/")
+    network = Net("data/exp/LipoMoved/")
 
     trainer = pl.Trainer(
         gpus=-1,

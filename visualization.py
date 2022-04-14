@@ -125,8 +125,11 @@ def myshow3d(mask, image=None, overlap=None, xslices=[], yslices=[], zslices=[],
 
         random_tmp = Path("tmp", str(random.randint(0,10000)))
         random_tmp.mkdir(parents=True, exist_ok=True)
-        for i in range(0, size[2]):
-            myshow(img[:,:,i], mask[:,:,i], title, margin, dpi)
+        for i in range(0, size[0]):
+            if image is not None or overlap is not None:
+                myshow(img[i,:,:], mask[i,:,:], title, margin, dpi)
+            else:
+                myshow(img[i,:,:], title=title, margin=margin, dpi=dpi)
 
             filename = f'tmp/tmp_gif{i}.png'
             filenames.append(filename)
@@ -166,3 +169,20 @@ def myshow3d(mask, image=None, overlap=None, xslices=[], yslices=[], zslices=[],
         if save:
             plt.savefig(f'{save}_snapshot.png')
             plt.close("all")
+
+def slideshow(dataset, axis="z", enlarge=2, samples=[]):
+    i = 0
+    max_i = len(dataset)
+
+    def onclick1(fig):
+        global i
+        fig.clear()
+        i += 1
+        i %= max_i
+        switch_figs[i](fig)
+        plt.draw()
+
+    
+
+
+    fig.canvas.mpl_connect('button_press_event', lambda event: onclick1(fig))

@@ -347,8 +347,9 @@ class BoudingBoxd(MapTransform):
                 for idx in range(d[key].shape[0]):
                     new_dkey.append(self.extract_bbox_region(d[key][idx], bbox))
                 d[key] = np.stack(new_dkey, axis=0)
-                d[f"{key}_meta_dict"]["bbox"] = d[key].size
             else:
                 d[key] = self.extract_bbox_region(d[key], bbox)
+            
+            d[f"{key}_meta_dict"]["bbox"] = bbox
 
         return d
