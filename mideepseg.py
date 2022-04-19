@@ -8,6 +8,7 @@ from monai.transforms import (
     Compose,
     CropForegroundd,
     RandRotated,
+    DivisiblePadd,
     RandFlipd,
     RandScaleIntensityd,
     RandShiftIntensityd,
@@ -88,6 +89,7 @@ class Net(pl.LightningModule):
         self.best_val_epoch = 0
         self.data_dir = data_dir
         self.max_epochs = 3000
+        self.batch_size = 1
 
     def forward(self, x):
         return self._model(x)
@@ -129,6 +131,10 @@ class Net(pl.LightningModule):
                     keys=["image"],
                     nonzero=True,
                     channel_wise=False,
+                ),
+                DivisiblePadd(
+                    keys=["image", "point", "label"],
+                    k=32
                 ),
                 EGDMapd(
                     keys=["point"],
@@ -179,6 +185,10 @@ class Net(pl.LightningModule):
                     nonzero=True,
                     channel_wise=False,
                 ),
+                DivisiblePadd(
+                    keys=["image", "point", "label"],
+                    k=32
+                ),
                 EGDMapd(
                     keys=["point"],
                     image="image",
@@ -200,8 +210,8 @@ class Net(pl.LightningModule):
 
     def train_dataloader(self):
         train_loader = DataLoader(
-            self.train_ds, batch_size=2, shuffle=True,
-            num_workers=4, drop_last=True,
+            self.train_ds, batch_size=self.batch_size, shuffle=True,
+            num_workers=4,
         )
         return train_loader
 
@@ -223,7 +233,7 @@ class Net(pl.LightningModule):
         output = self.forward(images)
         loss = self.loss_function(output, labels)
         self.log("loss", loss, on_epoch=True, batch_size=self.batch_size)
-        return {"loss": loss, "logs": logs}
+        return {"loss": loss}
 
     def training_epoch_end(self, outputs):
         # Only required for logging it to mlflow for some reason.
@@ -231,16 +241,7 @@ class Net(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         images, labels = batch["image"], batch["label"]
-        roi_size = (192, 192, 32)
-        sw_batch_size = 2
-        outputs = sliding_window_inference(
-            images,
-            roi_size,
-            sw_batch_size,
-            self.forward,
-            overlap=0.5,
-            mode="gaussian"
-        )
+        outputs = self.forward(images)
         loss = self.loss_function(outputs, labels)
         outputs = [self.post_pred(i) for i in decollate_batch(outputs)]
         labels = [self.post_label(i) for i in decollate_batch(labels)]
@@ -275,8 +276,7 @@ class Net(pl.LightningModule):
 if __name__=="__main__":
     lr_logger = LearningRateMonitor(logging_interval="epoch")
 
-    #network = Net("/trinity/home/dspaanderman/InteractiveSeg/data/exp/LipoMoved/")
-    network = Net("data/exp/LipoMoved/")
+    network = Net("/trinity/home/dspaanderman/InteractiveSeg/data/exp/LipoMoved/")
 
     trainer = pl.Trainer(
         gpus=-1,
