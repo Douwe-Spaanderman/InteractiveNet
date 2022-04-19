@@ -27,6 +27,7 @@ class MaskItem():
         self.Cropped = False
         self.RandomPoints = None
         self.ExtremePoints = None
+        self.CenterPoints = None
         self.BoudingBox = None
         self.NewMask = None
         self.ChangedMask = np.copy(self.Mask)
@@ -204,6 +205,16 @@ class MaskItem():
 
         return self.RandomPoints
 
+    def center_point(self):
+        self.CenterPoints = np.array(
+            [
+                np.rint(self.Center).astype(int)
+            ])
+
+        self._assert_in_bbox(self.CenterPoints)
+
+        return self.CenterPoints
+
     def combine_to_map(self, points=[], label=1):
         self.NewMask = np.zeros(shape=self.Dimensions)
         if label == 1:
@@ -234,7 +245,7 @@ class MaskItem():
         # Uncomment processed mask for dev
         #self._save_Image(self._to_simpleITK(self.ChangedMask), str(location / "processed_mask.nii.gz"))
 
-def create_sample(input_mask, input_image=None, border=None, extreme_points=None, random_points=None, scribble=False, mode="Tr", save=None, plot=None, gif=False):
+def create_sample(input_mask, input_image=None, border=None, extreme_points=None, random_points=None, center_point=None, scribble=False, mode="Tr", save=None, plot=None, gif=False):
     data = MaskItem(input_mask, input_image)
 
     data.get_bbox(pad=[1,3,3])
@@ -248,6 +259,9 @@ def create_sample(input_mask, input_image=None, border=None, extreme_points=None
 
     if random_points:
         overlap.append(data.random_points(n=int(random_points)))
+
+    if center_point:
+        overlap.append(data.center_point())
 
     newmask = data.combine_to_map(overlap)
     # Saving data
@@ -330,6 +344,13 @@ def main():
         help="Do you want to get random points, if so how many"
         )
     parser.add_argument(
+        "-c",
+        "--center_point",
+        nargs="?",
+        default=None,
+        help="Do you want to get the center point"
+        )
+    parser.add_argument(
         "-s",
         "--plot",
         nargs="?",
@@ -369,6 +390,7 @@ def main():
                 border = args.border,
                 extreme_points = args.extreme_points,
                 random_points = args.random_points,
+                center_point = args.center_point,
                 scribble=False,
                 mode = mode,
                 save = output_folder,
@@ -396,6 +418,7 @@ def main():
                     "border" : f"{args.border}",
                     "extreme_points": f"{args.extreme_points}",
                     "random_points": f"{args.random_points}",
+                    "center_point": f"{args.center_point}",
                     "plot": f"{args.plot}",
                     "gif": f"{args.gif}",
                 },
