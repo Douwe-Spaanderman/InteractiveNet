@@ -15,7 +15,7 @@ class MaskItem(object):
     def __init__(self, Mask, Image):
         self.MaskName = Mask.name
         self.ImageName = Image.name
-        self.AnnotationName = Image.stem.split("_")
+        self.AnnotationName = Mask.name
         self.Mask = self._from_simpleITK(self._read_Image(Mask))
         self.Image = self._read_Image(Image)
         self.Center = ndimage.center_of_mass(self.Mask)
@@ -33,13 +33,6 @@ class MaskItem(object):
         self.NewMask = None
         self.ChangedMask = np.copy(self.Mask)
         self.ShowMask = np.copy(self.Mask)
-
-        # Create new annotation name
-        if len(self.AnnotationName) > 2:
-            self.AnnotationName = '_'.join(self.AnnotationName[1:])
-        else: 
-            self.AnnotationName = self.AnnotationName[-1]
-        self.AnnotationName = "annotation_" + self.AnnotationName + ".nii.gz"
 
     def _from_simpleITK(self, img):
         if img is not None:
