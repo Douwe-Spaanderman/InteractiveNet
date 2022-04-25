@@ -8,9 +8,10 @@ import SimpleITK as sitk
 import numpy as np
 from pathlib import Path
 from scipy import ndimage
-from visualization import myshow3d
 
-class MaskItem():
+from interactivenet.utils.visualization import myshow3d
+
+class MaskItem(object):
     def __init__(self, Mask, Image):
         self.MaskName = Mask.name
         self.ImageName = Image.name
