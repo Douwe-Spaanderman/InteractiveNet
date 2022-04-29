@@ -1,3 +1,9 @@
+import numpy as np
+
+from skimage.transform import resize
+from nibabel import affines
+import numpy.linalg as npl
+
 def resample_label(label, shape, anisotrophy_flag):
     reshaped = np.zeros(shape, dtype=np.uint8)
     n_class = np.max(label)
@@ -91,7 +97,7 @@ def resample_image(image, shape, anisotrophy_flag):
     resized = np.stack(resized_channels, axis=0)
     return resized
 
-def resample_point(image, affine, new_spacing, shape):
+def resample_annotation(image, affine, new_spacing, shape):
     resized_channels = []
     for image_d in image:
         resized = np.zeros(shape)

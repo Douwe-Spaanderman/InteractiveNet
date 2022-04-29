@@ -1,11 +1,9 @@
+import warnings
+
 from monai.transforms.transform import MapTransform
-from skimage.transform import resize
 import numpy as np
 import GeodisTK
-from nibabel import affines
-import numpy.linalg as npl
-
-from interactivenet.utils.resample import resample_image, resample_label, resample_point
+from interactivenet.utils.resample import resample_image, resample_label, resample_annotation
 
 class Resamplingd(MapTransform):
     """
@@ -33,11 +31,11 @@ class Resamplingd(MapTransform):
 
         return check(spacing) or check(self.target_spacing)
 
-    def sanity_in_mask(self, point, label):
+    def sanity_in_mask(self, annotation, label):
         sanity = []
-        for i, point_d in enumerate(point):
+        for i, annotation_d in enumerate(annotation):
             label_d = label[i]
-            idx_x, idx_y, idx_z = np.where(point_d > 0.5)
+            idx_x, idx_y, idx_z = np.where(annotation_d > 0.5)
             sanity_d = []
             for x, y, z in zip(idx_x, idx_y, idx_z):
                 sanity_d.append(label_d[x, y, z] == 1)
@@ -48,9 +46,11 @@ class Resamplingd(MapTransform):
 
     def __call__(self, data):
         # load data
+
+        # This is not really nice and could be better with sanitizing input
         if len(self.keys) == 3:
-            image, point, label = self.keys
-            nimg, npnt, nseg = image, point, label
+            image, annotation, label = self.keys
+            nimg, npnt, nseg = image, annotation, label
         else:
             image = self.keys
             name = image
@@ -58,17 +58,23 @@ class Resamplingd(MapTransform):
         d = dict(data)
         image = d[image]
         image_spacings = d[f"{nimg}_meta_dict"]["pixdim"][1:4].tolist()
+        print(f"Original Spacing: {image_spacings} \t Target Spacing: {self.target_spacing}")
 
-        if "point" in self.keys:
-            point = d["point"]
-            point[point < 0] = 0
+        if "annotation" in self.keys:
+            annotation = d["annotation"]
+            annotation[annotation < 0] = 0
+        elif "point" in self.keys:
+            annotation = d["point"]
+            annotation[annotation < 0] = 0
 
         if "label" in self.keys:
             label = d["label"]
             label[label < 0] = 0
-
-        if "seg" in self.keys:
+        elif "seg" in self.keys:
             label = d["seg"]
+            label[label < 0] = 0
+        elif "mask" in self.keys:
+            label = d["mask"]
             label[label < 0] = 0
 
         # calculate shape
@@ -81,39 +87,54 @@ class Resamplingd(MapTransform):
             resample_flag = True
             spacing_ratio = np.array(image_spacings) / np.array(self.target_spacing)
             resample_shape = self.calculate_new_shape(spacing_ratio, original_shape)
+            print(f"Original Shape: {original_shape} \t Target Shape: {resample_shape}")
             anisotrophy_flag = self.check_anisotrophy(image_spacings)
             image = resample_image(image, resample_shape, anisotrophy_flag)
 
-            if "label" in self.keys or "seg" in self.keys:
+            if "label" in self.keys or "seg" in self.keys or "mask" in self.keys:
                 label = resample_label(label, resample_shape, anisotrophy_flag)
 
-            if "point" in self.keys:
-                point = resample_point(data["point"], data['point_meta_dict']["affine"], self.target_spacing, resample_shape)
-                if "label" in self.keys or "seg" in self.keys:
-                    d["points_in_mask"] = self.sanity_in_mask(point, label)
-
-        d["resample_flag"] = resample_flag
-        d["anisotrophy_flag"] = anisotrophy_flag
+            if "annotation" in self.keys:
+                annotation = resample_annotation(d["annotation"], d['annotation_meta_dict']["affine"], self.target_spacing, resample_shape)
+                if "label" in self.keys or "seg" in self.keys or "mask" in self.keys:
+                    d["annotation_meta_dict"]["in_mask"] = self.sanity_in_mask(annotation, label)
+                    if d['annotation_meta_dict']["in_mask"] == False:
+                        warnings.warn("Annotations are outside of the mask, please fix this")
+            elif "point" in self.keys:
+                annotation = resample_annotation(d["point"], d['point_meta_dict']["affine"], self.target_spacing, resample_shape)
+                if "label" in self.keys or "seg" in self.keys or "mask" in self.keys:
+                    d['point_meta_dict']["in_mask"] = self.sanity_in_mask(annotation, label)
+                    if d['point_meta_dict']["in_mask"] == False:
+                        warnings.warn("Annotations are outside of the mask, please fix this")
 
         new_meta = {
+            "org_spacing": np.array(image_spacings),
+            "org_dim": np.array(original_shape),
             "new_spacing": np.array(self.target_spacing),
-            "new_dim": np.array(resample_shape)
+            "new_dim": np.array(resample_shape),
+            "resample_flag": resample_flag,
+            "anisotrophy_flag": anisotrophy_flag,
         }
 
         d[f"{nimg}"] = image
         d[f"{nimg}_meta_dict"].update(new_meta)
 
-        if "point" in self.keys:
-            d["point"] = point
+        if "annotation" in self.keys:
+            d["annotation"] = annotation
+            d["annotation_meta_dict"].update(new_meta)
+        elif "point" in self.keys:
+            d["point"] = annotation
             d["point_meta_dict"].update(new_meta)
-
+            
         if "label" in self.keys:
             d["label"] = label
             d["label_meta_dict"].update(new_meta)
-
         elif "seg" in self.keys:
             d["seg"] = label
             d["seg_meta_dict"].update(new_meta)
+        elif "mask" in self.keys:
+            d["mask"] = label
+            d["mask_meta_dict"].update(new_meta)
 
         return d
 
@@ -130,12 +151,14 @@ class EGDMapd(MapTransform):
         image,
         lamb=1,
         iter=4,
+        logscale=True,
     ) -> None:
         super().__init__(keys)
         self.keys = keys
         self.image = image
         self.lamb = lamb
         self.iter = iter
+        self.logscale = logscale
 
     def __call__(self, data):
         d = dict(data)
@@ -153,11 +176,14 @@ class EGDMapd(MapTransform):
             if len(d[key].shape) == 4:
                 for idx in range(d[key].shape[0]):
                     GD = GeodisTK.geodesic3d_raster_scan(d[self.image][idx].astype(np.float32), d[key][idx].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
-                    d[key][idx, :, :, :] = np.exp(-GD)
+                    if self.logscale == True:
+                        d[key][idx, :, :, :] = np.exp(-GD)
             else:
                 GD = GeodisTK.geodesic3d_raster_scan(d[self.image].astype(np.float32), d[key].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
-                d[key] = np.exp(-GD)
-
+                if self.logscale == True:
+                    d[key] = np.exp(-GD)
+            
+        print(f"Geodesic Distance Map with lamd: {self.lamb}, iter: {self.iter} and logscale: {self.logscale}")
         return d
 
 class BoudingBoxd(MapTransform):
@@ -172,6 +198,7 @@ class BoudingBoxd(MapTransform):
         keys,
         on,
         relaxation=0,
+        mask=None,
     ) -> None:
         super().__init__(keys)
         self.keys = keys
@@ -226,6 +253,8 @@ class BoudingBoxd(MapTransform):
             output.append(d[key])
 
         bbox = self.calculate_bbox(d[self.on][0])
+        bbox_shape = np.subtract(bbox[1],bbox[0])
+        print(f"Bouding box at location: {bbox[0]} and {bbox[1]} \t bbox is relaxt with: {self.relaxation} \t shape after cropping: {bbox_shape}")
         for key in self.keys:
             if len(d[key].shape) == 4:
                 new_dkey = []
@@ -236,5 +265,7 @@ class BoudingBoxd(MapTransform):
                 d[key] = self.extract_bbox_region(d[key], bbox)
             
             d[f"{key}_meta_dict"]["bbox"] = bbox
+            d[f"{key}_meta_dict"]["bbox_shape"] = bbox_shape
+            d[f"{key}_meta_dict"]["bbox_relaxation"] = self.relaxation
 
         return d
