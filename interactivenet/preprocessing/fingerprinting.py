@@ -1,7 +1,7 @@
 from typing import List, Tuple
 from pathlib import PosixPath
 
-from statistics import median
+from statistics import median, stdev
 import os
 import numpy as np
 import nibabel as nib
@@ -14,6 +14,9 @@ class FingerPrint(object):
         annotations: List[PosixPath]
     ) -> None:
         print("Initializing Fingerprinting")
+        print("Currently still have to implement the following fingerprints:")
+        print("- Extra size of bounding box, based on the mask size")
+        print("- Padding/Cropping/Sliding window strategy\n")
         self.images = images
         self.masks = masks
         self.annotations = annotations
@@ -64,14 +67,38 @@ class FingerPrint(object):
 
         return check(spacing) or check(self.target_spacing)
 
-    def resampling_strategy(self, spacing:List[Tuple], anisotropic=False):
-        target_spacing = list((median(spacing[0]), median(spacing[1]), median(spacing[2])))
+    def check_orientation(self, orientations:List[Tuple]):
+        unique_orientations = list(set(orientations))
+        if len(unique_orientations) == 1:
+            orientation_message = f"All images have the same orientation: {unique_orientations[0]}"
+        else:
+            from collections import Counter
+            unique_orientations = list(Counter(self.orientation).keys())
+            orientation_message = f"Not all images have the same orientation, most are {unique_orientations[0]} but some also have {unique_orientations[1:]}\n  consider adjusting the orientation"
 
-        if anisotropic == True:
+        return orientation_message
+
+    def get_resampling_strategy(self, spacing:List[Tuple]):
+        spacing = list(zip(*spacing))
+        target_spacing = list((median(spacing[0]), median(spacing[1]), median(spacing[2])))
+        strategy = "Median"
+
+        if self.anisotrophy.count(True) >= len(self.anisotrophy) / 2:
             index_max = np.argmax(target_spacing)
             target_spacing[index_max] = np.percentile(spacing[index_max],10)
+            strategy = "Anisotropic"
 
-        return tuple(target_spacing)
+        return tuple(target_spacing), strategy
+
+    #def get_input_size_strategy(self, size, std):
+    #    print("Currently have to implement this based on experiments")
+
+    def calculate_median(self, item:List[Tuple], std:bool=False):
+        item = list(zip(*item))
+        if std == True:
+            return (stdev(item[0]), stdev(item[1]), stdev(item[2])), (median(item[0]), median(item[1]), median(item[2]))
+        else:
+            return (median(item[0]), median(item[1]), median(item[2]))
 
     def calculate_bbox(self, data, relaxation):
         inds_x, inds_y, inds_z = np.where(data.get_fdata() > 0.5)
@@ -123,46 +150,38 @@ class FingerPrint(object):
             bbox = self.calculate_bbox(mask, [10, 10, 2])
             self.bbox.append(bbox[1] - bbox[0])
 
-        keep_dims = self.dim
-        self.dim = list(zip(*self.dim))
-        self.dim = (median(self.dim[0]), median(self.dim[1]), median(self.dim[2]))
+        # Size
+        self.dim = self.calculate_median(self.dim)
 
-        keep_pixdims = self.pixdim
-        self.pixdim = list(zip(*self.pixdim))
-        if self.anisotrophy.count(True) >= len(self.anisotrophy) / 2:
-            resample_strategy = "Anistropic"
-            self.pixdim = self.resampling_strategy(self.pixdim, True)
-        else:
-            resample_strategy = "Normal"
-            self.pixdim = self.resampling_strategy(self.pixdim)
+        # Spacing
+        self.target_spacing, self.resample_strategy = self.get_resampling_strategy(self.pixdim)
+        self.spacing_ratios = [np.array(x) / np.array(self.target_spacing) for x in self.pixdim]
 
-        unique_orientations = list(set(self.orientation))
-        if len(unique_orientations) == 1:
-            orientation_message = f"All images have the same orientation: {unique_orientations[0]}"
-        else:
-            from collections import Counter
-            unique_orientations = list(Counter(self.orientation).keys())
-            orientation_message = f"Not all images have the same orientation, most are {unique_orientations[0]} but some also have {unique_orientations[1:]}\n   Consider adjusting the orientation"
+        # Resampled shape -
+        self.resampled_shape = [self.calculate_new_shape(x, y) for x, y in zip(self.spacing_ratios, self.bbox)]
+        # Patches / Divisible images
+        #self.final_shape = self.get_input_size_strategy(self.resampled_shape)
+        self.resampled_shape = self.calculate_median(self.resampled_shape)
 
-        keep_bbox = self.bbox
-        self.bbox = list(zip(*self.bbox))
-        self.bbox = (median(self.bbox[0]), median(self.bbox[1]), median(self.bbox[2]))
+        # Bounding box
+        self.bbox = self.calculate_median(self.bbox)
 
-        spacing_ratios = [np.array(x) / np.array(self.pixdim) for x in keep_pixdims]
-        final_shape = [self.calculate_new_shape(x, y) for x, y in zip(spacing_ratios, keep_bbox)]
-        self.final_shape = list(zip(*final_shape))
-        self.final_shape = (median(self.final_shape[0]), median(self.final_shape[1]), median(self.final_shape[2]))
+        # Check orientations of images
+        self.orientation_message = self.check_orientation(self.orientation)
 
         print("\nFingeprint:")
         print("- Database Structure: Correct")
         print(f"- All annotions in mask: {self.in_mask}")
-        print(f"- Resampling strategy: {resample_strategy}")
+        print(f"- Resampling strategy: {self.resample_strategy}")
         print(f"- All images anisotropic: {all(self.anisotrophy)}")
-        print(f"- Target spacing: {self.pixdim}")
+        print(f"- Target spacing: {self.target_spacing}")
         print(f"- Median shape: {self.dim}")
+        print(f"- Bounding box extracted based on: Mask")
         print(f"- Median shape of bbox: {self.bbox}")
-        print(f"- Median shape of bbox after resampling: {self.final_shape} (final shape)")
-        print(f"- {orientation_message}")
+        print(f"- Median shape of bbox after resampling: {self.resampled_shape}")
+        #print(f"- Median shape of bbox after padding/cropping: {self.final_shape} (final shape)")
+        print(f"- {self.orientation_message}")
+        print("\n")
 
     def save(self):
         print('Currently not implemented')

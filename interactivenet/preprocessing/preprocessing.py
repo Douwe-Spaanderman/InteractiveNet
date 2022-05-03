@@ -15,9 +15,9 @@ from monai.transforms import (
 
 from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd
 
-class Preprocessing(object):
+class Preprocessing(_MonaiDataset):
     def __init__(
-        self,
+        self, 
         images: List[PosixPath],
         masks: List[PosixPath],
         annotations: List[PosixPath],
@@ -25,10 +25,11 @@ class Preprocessing(object):
         target_spacing: Tuple[float], 
         task: int,
     ) -> None:
-        files =[
+
+        data =[
             {"image": img_path, "mask": mask_path, "annotation": annot_path}
             for img_path, mask_path, annot_path in zip(images, masks, annotations)
-            ]
+        ]
 
         transforms = Compose(
             [
@@ -60,21 +61,8 @@ class Preprocessing(object):
                 ),
                 ]
         )
-
-        PreprocessDataset(
-            data=files, task=task, transform=transforms,
-        )
-
-class PreprocessDataset(_MonaiDataset):
-    def __init__(
-        self, 
-        data: Sequence, 
-        task: int,
-        transform: Optional[Callable] = None
-    ) -> None:
-        super().__init__(data, transform)
-
         
+        super().__init__(data, transforms)
         #name, file_location, padded_size, bbox,  = []
         print("Preprocessing:\n")
         for i, item in enumerate(self.data):
@@ -82,12 +70,8 @@ class PreprocessDataset(_MonaiDataset):
             print(f"File: {name}")
             item = self.__getitem__(i)
 
-            # DivisiblePadding <- Might want to infer this based on the fingerprinting
-            padded_size = item["image"].shape[1:]
-            print(f"Added zero padding in order to make it divisible, image now has shape: {padded_size}")
-            print("\n")
-
             # Save
+            #p
 
         print(item["image_meta_dict"])
 
@@ -101,6 +85,6 @@ if __name__=="__main__":
     images = [x for x in Path(exp, task, "imagesTr").glob('**/*') if x.is_file()]
     masks = [x for x in Path(exp, task, "labelsTr").glob('**/*') if x.is_file()]
     annotations = [x for x in Path(exp, task, "interactionTr").glob('**/*') if x.is_file()]
-    results = FingerPrint(sorted(images)[0:2], sorted(masks)[0:2], sorted(annotations)[0:2])
+    results = FingerPrint(sorted(images)[:2], sorted(masks)[:2], sorted(annotations)[:2])
     results()
-    Preprocessing(sorted(images)[0:2], sorted(masks)[0:2], sorted(annotations)[0:2], results.dim, results.pixdim, task)
+    Preprocessing(sorted(images)[:2], sorted(masks)[:2], sorted(annotations)[:2], results.dim, results.target_spacing, task)
