@@ -9,7 +9,7 @@ import numpy as np
 from pathlib import Path
 from scipy import ndimage
 
-from interactivenet.utils.visualization import myshow3d
+from interactivenet.utils.visualize import ImagePlot
 
 class MaskItem(object):
     def __init__(self, Mask, Image):
@@ -228,8 +228,8 @@ class MaskItem(object):
             for point in point_map:
                 self.ShowMask[point[0], point[1], point[2]] = color[i]
         
-    def show(self, overlap=None, xslices=[], yslices=[], zslices=[], enlarge=10, title=None, margin=0.05, dpi=300, show=True, save=None, gif=False) -> None:
-        myshow3d(self.ShowMask, self.Image, overlap, xslices, yslices, zslices, enlarge, title, margin, dpi, show, save, gif)
+    def show(self, overlap=None, CT=False, show=True, save=None) -> None:
+        ImagePlot(self.Image, self.ShowMask, annotation=overlap, CT=CT, show=show, save=save)
 
     def save(self, location, mode) -> None:
         self._save_Image(self._to_simpleITK(self.Mask), str(location / f"labels{mode}" / self.MaskName))
@@ -266,6 +266,8 @@ def create_sample(input_mask, input_image=None, border=None, extreme_points=None
 
         data.save(save, mode=mode)
     
+    print('Plotting is not working atm')
+    """
     if plot and save:
         newmask = data.crop_from_bbox()
         save = save / "images"
@@ -290,6 +292,7 @@ def create_sample(input_mask, input_image=None, border=None, extreme_points=None
         # Plot mask with newmask
         data.Image = None
         data.show(overlap=newmask, zslices=list(range(0,newmask.shape[0],1)), show=True, gif=gif)
+    """
 
 def main():
     parser = argparse.ArgumentParser(
@@ -357,13 +360,6 @@ def main():
         nargs="?",
         default=None,
         help="Do you want to plot the images as gifs"
-        )
-    parser.add_argument(
-        "-m",
-        "--mask_name",
-        nargs="?",
-        default="masks",
-        help="How are the masks called (can be masks or segmentation"
         )
     args = parser.parse_args()
 
