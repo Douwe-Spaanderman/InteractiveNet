@@ -1,35 +1,19 @@
 from pathlib import Path
 import numpy as np
+import os
 
 from monai.utils import set_determinism
 from monai.transforms import (
     AsDiscrete,
-    AddChanneld,
     Compose,
-    CropForegroundd,
-    RandRotated,
-    DivisiblePadd,
     RandFlipd,
     RandScaleIntensityd,
-    RandShiftIntensityd,
-    LoadImaged,
-    Orientationd,
-    RandCropByPosNegLabeld,
-    ScaleIntensityRanged,
-    Spacingd,
-    EnsureTyped,
-    EnsureType,
     ConcatItemsd,
     ToTensord,
     SpatialPadd,
-    RandCropByPosNegLabeld,
-    EnsureChannelFirstd,
-    CropForegroundd,
-    RandZoomd,
     RandGaussianNoised,
     RandGaussianSmoothd,
     CastToTyped,
-    NormalizeIntensityd
 )
 from monai.networks.nets import DynUNet
 from monai.metrics import DiceMetric
@@ -37,14 +21,16 @@ from monai.losses import DiceCELoss
 from monai.inferers import sliding_window_inference
 from monai.data import CacheDataset, DataLoader, decollate_batch
 
-from transforms import Resamplingd, EGDMapd, BoudingBoxd
+from interactivenet.transforms.transforms import LoadPreprocessed
+from interactivenet.networks.unet import UNet
 
 import torch
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
+from pytorch_lightning.callbacks import LearningRateMonitor
 
 import mlflow.pytorch
 
+# Extra
 def get_kernels_strides(sizes, spacings):
     strides, kernels = [], []
     while True:
@@ -64,12 +50,29 @@ def get_kernels_strides(sizes, spacings):
     kernels.append(len(spacings) * [3])
     return kernels, strides
 
-class Net(pl.LightningModule):
-    def __init__(self, data_dir):
-        super().__init__()
+def get_receptive_field(kernels, strides):
+    r = [1,1,1]
+    j = [1,1,1]
+    for kernel, stride in zip(kernels, strides):
+        for axis in range(len(kernel)):
+            k = kernel[axis]
+            s = stride[axis]
 
-        self.kernels, self.strides = get_kernels_strides((192, 192, 32), (0.69097221, 0.69097221, 3.59999912))
-        self._model = DynUNet(
+            # First conv
+            j[axis] = j[axis] * s
+            r[axis] = r[axis] + ((k - 1) * j[axis])
+
+            # Second conv - stride always 1
+            r[axis] = r[axis] + ((k - 1) * j[axis])
+            
+    return r
+
+class Net(pl.LightningModule):
+    def __init__(self, npz, metadata):
+        super().__init__()
+        self.kernels, self.strides = get_kernels_strides((152, 144, 32), (0.703125, 0.703125, 3.84000027179718))
+        print(self.kernels, self.strides)
+        self._model = UNet(
             spatial_dims=3,
             in_channels=2,
             out_channels=2,
@@ -77,9 +80,12 @@ class Net(pl.LightningModule):
             strides=self.strides,
             upsample_kernel_size=self.strides[1:],
             filters=[4, 8, 16, 32, 64, 128],
-            act_name = 'PRELU',
+            activation = 'LRELU',
             deep_supervision = False,
         )
+        r = get_receptive_field(self.kernels, self.strides)
+        print(r)
+        exit()
 
         self.loss_function = DiceCELoss(to_onehot_y=True, softmax=True)
         self.dice_metric = DiceMetric(include_background=False, reduction="mean", get_not_nans=False)
@@ -87,7 +93,10 @@ class Net(pl.LightningModule):
         self.post_label = AsDiscrete(to_onehot=2)
         self.best_val_dice = 0
         self.best_val_epoch = 0
-        self.data_dir = data_dir
+        self.data = [
+            {"npz": npz_path, "metadata": metadata_path}
+            for npz_path, metadata_path in zip(npz, metadata)
+        ]
         self.max_epochs = 3000
         self.batch_size = 1
 
@@ -95,61 +104,12 @@ class Net(pl.LightningModule):
         return self._model(x)
 
     def prepare_data(self):
-        images = sorted([f for f in Path(self.data_dir, "imagesTr").glob('**/*') if f.is_file()])
-        labels = sorted([f for f in Path(self.data_dir, "labelsTr").glob('**/*') if f.is_file()])
-        points = sorted([f for f in Path(self.data_dir, "interactionTr").glob('**/*') if f.is_file()])
-        train_files =[
-            {"image": image_name, "point": point_name, "label": label_name}
-            for image_name, point_name, label_name in zip(images, points, labels)
-            ]
-
-        images = sorted([f for f in Path(self.data_dir, "imagesTs").glob('**/*') if f.is_file()])
-        labels = sorted([f for f in Path(self.data_dir, "labelsTs").glob('**/*') if f.is_file()])
-        points = sorted([f for f in Path(self.data_dir, "interactionTs").glob('**/*') if f.is_file()])
-        val_files =[
-            {"image": image_name, "point": point_name, "label": label_name}
-            for image_name, point_name, label_name in zip(images, points, labels)
-            ]
-
-        # set deterministic training for reproducibility
         set_determinism(seed=0)
 
         train_transforms = Compose(
             [
-                LoadImaged(keys=["image", "point", "label"]),
-                EnsureChannelFirstd(keys=["image", "point", "label"]),
-                Resamplingd(
-                    keys=["image", "point", "label"],
-                    pixdim=(0.69097221, 0.69097221, 3.59999912),
-                ),
-                BoudingBoxd(
-                    keys=["image", "point", "label"],
-                    on="point",
-                    relaxation=(15, 15, 4),
-                ),
-                NormalizeIntensityd(
-                    keys=["image"],
-                    nonzero=True,
-                    channel_wise=False,
-                ),
-                DivisiblePadd(
-                    keys=["image", "point", "label"],
-                    k=32
-                ),
-                EGDMapd(
-                    keys=["point"],
-                    image="image",
-                    lamb=1,
-                    iter=4,
-                ),
-                RandZoomd(
-                    keys=["image", "point", "label"],
-                    min_zoom=0.9,
-                    max_zoom=1.2,
-                    mode=("trilinear", "trilinear", "nearest"),
-                    align_corners=(True, True, None),
-                    prob=0.15,
-                ),
+                LoadPreprocessed(keys=["npz", "metadata"], new_keys=["image", "annotation", "mask"]),
+                SpatialPadd(keys=["image","annotation", "mask"], spatial_size=(152, 144, 32)),
                 RandGaussianNoised(keys=["image"], std=0.01, prob=0.15),
                 RandGaussianSmoothd(
                     keys=["image"],
@@ -159,53 +119,28 @@ class Net(pl.LightningModule):
                     prob=0.15,
                 ),
                 RandScaleIntensityd(keys=["image"], factors=0.3, prob=0.15),
-                RandFlipd(["image", "point", "label"], spatial_axis=[0], prob=0.5),
-                RandFlipd(["image", "point", "label"], spatial_axis=[1], prob=0.5),
-                RandFlipd(["image", "point", "label"], spatial_axis=[2], prob=0.5),
-                CastToTyped(keys=["image", "point", "label"], dtype=(np.float32, np.float32, np.uint8)),
-                ConcatItemsd(keys=["image", "point"], name="image"),
-                ToTensord(keys=["image", "label"]),
+                RandFlipd(keys=["image", "annotation", "mask"], spatial_axis=[0], prob=0.5),
+                RandFlipd(keys=["image", "annotation", "mask"], spatial_axis=[1], prob=0.5),
+                RandFlipd(keys=["image", "annotation", "mask"], spatial_axis=[2], prob=0.5),
+                CastToTyped(keys=["image", "annotation", "mask"], dtype=(np.float32, np.float32, np.uint8)),
+                ConcatItemsd(keys=["image", "annotation"], name="image"),
+                ToTensord(keys=["image", "mask"]),
                 ]
         )
         val_transforms = Compose(
             [
-                LoadImaged(keys=["image", "point", "label"]),
-                EnsureChannelFirstd(keys=["image", "point", "label"]),
-                Resamplingd(
-                    keys=["image", "point", "label"],
-                    pixdim=(0.69097221, 0.69097221, 3.59999912),
-                ),
-                BoudingBoxd(
-                    keys=["image", "point", "label"],
-                    on="point",
-                    relaxation=(15, 15, 4),
-                ),
-                NormalizeIntensityd(
-                    keys=["image"],
-                    nonzero=True,
-                    channel_wise=False,
-                ),
-                DivisiblePadd(
-                    keys=["image", "point", "label"],
-                    k=32
-                ),
-                EGDMapd(
-                    keys=["point"],
-                    image="image",
-                    lamb=1,
-                    iter=4,
-                ),
-                CastToTyped(keys=["image", "point", "label"], dtype=(np.float32, np.float32, np.uint8)),
-                ConcatItemsd(keys=["image", "point"], name="image"),
-                ToTensord(keys=["image", "label"]),
+                LoadPreprocessed(keys=["npz", "metadata"], new_keys=["image", "annotation", "mask"]),
+                CastToTyped(keys=["image", "annotation", "mask"], dtype=(np.float32, np.float32, np.uint8)),
+                ConcatItemsd(keys=["image", "annotation"], name="image"),
+                ToTensord(keys=["image", "mask"]),
             ]
         )
 
         self.train_ds = CacheDataset(
-            data=train_files, transform=train_transforms,
+            data=self.data, transform=train_transforms,
         )
         self.val_ds = CacheDataset(
-            data=val_files, transform=val_transforms,
+            data=self.data, transform=val_transforms,
         )
 
     def train_dataloader(self):
@@ -229,7 +164,7 @@ class Net(pl.LightningModule):
         return [self.optimizer], [self.lr_scheduler]
 
     def training_step(self, batch, batch_idx):
-        images, labels = batch["image"], batch["label"]
+        images, labels = batch["image"], batch["mask"]
         output = self.forward(images)
         loss = self.loss_function(output, labels)
         self.log("loss", loss, on_epoch=True, batch_size=self.batch_size)
@@ -240,7 +175,7 @@ class Net(pl.LightningModule):
         self.log("lr", self.lr_scheduler["scheduler"].get_last_lr()[0])
 
     def validation_step(self, batch, batch_idx):
-        images, labels = batch["image"], batch["label"]
+        images, labels = batch["image"], batch["mask"]
         outputs = self.forward(images)
         loss = self.loss_function(outputs, labels)
         outputs = [self.post_pred(i) for i in decollate_batch(outputs)]
@@ -276,7 +211,11 @@ class Net(pl.LightningModule):
 if __name__=="__main__":
     lr_logger = LearningRateMonitor(logging_interval="epoch")
 
-    network = Net("/trinity/home/dspaanderman/InteractiveSeg/data/exp/LipoMoved/")
+    exp = os.environ["interactiveseg_processed"]
+    task = "Task001_Lipo"
+    arrays = [x for x in Path(exp, task, "network_input").glob('**/*.npz') if x.is_file()]
+    metadata = [x for x in Path(exp, task, "network_input").glob('**/*.pkl') if x.is_file()]
+    network = Net(sorted(arrays)[0:3], sorted(metadata)[0:3])
 
     trainer = pl.Trainer(
         gpus=-1,
