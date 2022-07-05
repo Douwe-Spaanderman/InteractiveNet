@@ -19,7 +19,7 @@ from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBo
 
 class Preprocessing(_MonaiDataset):
     def __init__(
-        self, 
+        self,
         images: List[PosixPath],
         masks: List[PosixPath],
         annotations: List[PosixPath],
@@ -100,7 +100,7 @@ class Preprocessing(_MonaiDataset):
 
             self.save_sample(item, name)
             print("")
-    
+
         with open(self.input_folder / "metadata.pkl", 'wb') as handle:
             pickle.dump(metainfo, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -147,7 +147,7 @@ if __name__=="__main__":
 
     import os
     exp = os.environ["interactiveseg_raw"]
-    task = "Task001_Lipo"
+    task = "Task710_STTMRI"
     images = [x for x in Path(exp, task, "imagesTr").glob('**/*') if x.is_file()]
     masks = [x for x in Path(exp, task, "labelsTr").glob('**/*') if x.is_file()]
     annotations = [x for x in Path(exp, task, "interactionTr").glob('**/*') if x.is_file()]

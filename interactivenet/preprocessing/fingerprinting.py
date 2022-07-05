@@ -150,7 +150,7 @@ class FingerPrint(object):
         def check(spacing):
             return np.max(spacing) / np.min(spacing) >= 3
 
-        return check(spacing) or check(self.target_spacing)
+        return check(spacing)
 
     def check_orientation(self, orientations:List[Tuple]):
         unique_orientations = list(set(orientations))
