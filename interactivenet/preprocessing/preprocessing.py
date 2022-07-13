@@ -20,23 +20,21 @@ from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBo
 class Preprocessing(_MonaiDataset):
     def __init__(
         self,
-        images: List[PosixPath],
-        masks: List[PosixPath],
-        annotations: List[PosixPath],
+        task: str,
         median_shape: Tuple[float],
         target_spacing: Tuple[float],
-        save_location: PosixPath,
         relax_bbox: Union[float, Tuple[float]] = 0.1,
         divisble_using: Union[int, Tuple[int]] = (16, 16, 8)
     ) -> None:
         print("Initializing Preprocessing")
+        self.task = task
+        self.get_files()
 
-        self.save_location = save_location
         self.relax_bbox = relax_bbox
         self.divisble_using = divisble_using
         self.data = [
             {"image": img_path, "mask": mask_path, "annotation": annot_path}
-            for img_path, mask_path, annot_path in zip(images, masks, annotations)
+            for img_path, mask_path, annot_path in zip(self.images, self.masks, self.annotations)
         ]
 
         self.transforms = Compose(
@@ -45,7 +43,7 @@ class Preprocessing(_MonaiDataset):
                 EnsureChannelFirstd(keys=["image", "annotation", "mask"]),
                 Visualized(
                     keys=["image", "annotation", "mask"],
-                    save=save_location / 'verbose' / 'raw',
+                    save=self.save_location / 'verbose' / 'raw',
                     annotation=True
                 ),
                 Resamplingd(
@@ -65,7 +63,7 @@ class Preprocessing(_MonaiDataset):
                 ),
                 Visualized(
                     keys=["image", "annotation", "mask"],
-                    save=save_location / 'verbose' / 'new',
+                    save=self.save_location / 'verbose' / 'new',
                     annotation=True,
                 ),
                 EGDMapd(
@@ -80,7 +78,7 @@ class Preprocessing(_MonaiDataset):
                 ),
                 Visualized(
                     keys=["image", "annotation", "mask"],
-                    save=save_location / 'verbose' / 'EGD',
+                    save=self.save_location / 'verbose' / 'EGD',
                     distancemap=True,
                 ),
                 ]
@@ -103,6 +101,16 @@ class Preprocessing(_MonaiDataset):
 
         with open(self.save_location / "metadata.pkl", 'wb') as handle:
             pickle.dump(metainfo, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def get_files(self):
+        self.exp = Path(os.environ["interactiveseg_raw"], self.task)
+    
+        self.images = sorted([x for x in (self.exp / "imagesTr").glob('**/*') if x.is_file()])
+        self.masks = sorted([x for x in (self.exp / "labelsTr").glob('**/*') if x.is_file()])
+        self.annotations = sorted([x for x in (self.exp / "interactionTr").glob('**/*') if x.is_file()])
+
+        self.save_location = Path(os.environ["interactiveseg_processed"], self.task)
+        self.save_location.mkdir(parents=True, exist_ok=True)
 
     def create_directories(self) -> None:
         self.input_folder = self.save_location / "network_input"
@@ -152,24 +160,23 @@ if __name__=="__main__":
              description="Preprocessing of "
          )
     parser.add_argument(
-         "-t",
-         "--task",
-         nargs="?",
-         default="Task710_STTMRI",
-         help="Task name"
+        "-t",
+        "--task",
+        nargs="?",
+        default="Task710_STTMRI",
+        type=str,
+        help="Task name"
+    )
+    parser.add_argument(
+        "-o",
+        "--leave_one_out",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Do you want to do leave one out experiments?"
     )
     args = parser.parse_args()
-    exp = os.environ["interactiveseg_raw"]
 
-    images = [x for x in Path(exp, args.task, "imagesTr").glob('**/*') if x.is_file()]
-    masks = [x for x in Path(exp, args.task, "labelsTr").glob('**/*') if x.is_file()]
-    annotations = [x for x in Path(exp, args.task, "interactionTr").glob('**/*') if x.is_file()]
-
-    processed = os.environ["interactiveseg_processed"]
-    save_location = Path(processed, args.task)
-    save_location.mkdir(parents=True, exist_ok=True)
-
-    results = FingerPrint(sorted(images), sorted(masks), sorted(annotations), save_location)
+    results = FingerPrint(args.task, leave_one_out=args.leave_one_out)
     results()
-    prepro = Preprocessing(sorted(images), sorted(masks), sorted(annotations), results.dim, results.target_spacing, save_location, results.relax_bbox, results.divisible_by)
+    prepro = Preprocessing(args.task, results.dim, results.target_spacing, results.relax_bbox, results.divisible_by)
     prepro()

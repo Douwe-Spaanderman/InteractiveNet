@@ -1,5 +1,5 @@
 from typing import List, Tuple, Union
-from pathlib import PosixPath
+from pathlib import Path, PosixPath
 import math
 import random
 import json
@@ -14,24 +14,20 @@ from interactivenet.utils.jsonencoders import NumpyEncoder
 class FingerPrint(object):
     def __init__(
         self,
-        images: List[PosixPath],
-        masks: List[PosixPath],
-        annotations: List[PosixPath],
-        save_location: PosixPath,
+        task: str,
         relax_bbox:float=0.1,
         seed:Union[int, None]=None,
         folds:int=5,
+        leave_one_out:bool=False,
     ) -> None:
         print("Initializing Fingerprinting")
-        print("Currently still have to implement the following fingerprints:")
-        print("- Padding/Cropping/Sliding window strategy")
-        self.images = images
-        self.masks = masks
-        self.annotations = annotations
-        self.save_location = save_location
+        self.task = task
+        self.get_files()
+
         self.relax_bbox = relax_bbox
         self.seed = seed
         self.folds = folds
+        self.leave_one_out = leave_one_out
         self.sanity_files()
 
         self.dim = []
@@ -111,7 +107,15 @@ class FingerPrint(object):
         print(f"- using the following splits: {self.splits}")
         print("\n")
 
-        self.save()
+    def get_files(self):
+        self.exp = Path(os.environ["interactiveseg_raw"], self.task)
+    
+        self.images = sorted([x for x in (self.exp / "imagesTr").glob('**/*') if x.is_file()])
+        self.masks = sorted([x for x in (self.exp / "labelsTr").glob('**/*') if x.is_file()])
+        self.annotations = sorted([x for x in (self.exp / "interactionTr").glob('**/*') if x.is_file()])
+        
+        self.save_location = Path(os.environ["interactiveseg_processed"], self.task)
+        self.save_location.mkdir(parents=True, exist_ok=True)
 
     def sanity_files(self):
         def check(a,b,c):
@@ -254,10 +258,30 @@ class FingerPrint(object):
         if not self.seed:
             self.seed = random.randint(0, 2**32 - 1)
 
-        kf = KFold(n_splits=self.folds, random_state=self.seed, shuffle=True)
         split = []
-        for train_index, val_index in kf.split(self.names):
-            split.append({"train":[self.names[i] for i in train_index],"val":[self.names[i] for i in val_index]})
+        if self.leave_one_out:
+            print("- Using leave one out crossval")
+            metadata = self.exp / "types.json"
+            if metadata.is_file():
+                with open(metadata) as f:
+                    metadata = json.load(f)
+            else:
+                raise KeyError("leave one out is True, but there is no types.json")
+
+            keys = list(metadata.keys())
+            for idx, key in enumerate(keys):
+                train_keys = keys[:idx] + keys[idx+1 :]
+                split.append({"train":[metadata[k] for k in train_keys],"val":metadata[key], "left out":key})
+
+            values = [x for xs in metadata.values() for x in xs]
+            if not all([name in values for name in self.names]):
+                raise KeyError("names from metadata don't match names in fingerprinting")
+
+            self.folds = len(metadata.keys())
+        else:
+            kf = KFold(n_splits=self.folds, random_state=self.seed, shuffle=True)
+            for train_index, val_index in kf.split(self.names):
+                split.append({"train":[self.names[i] for i in train_index],"val":[self.names[i] for i in val_index]})
 
         return split
 
@@ -297,9 +321,6 @@ class FingerPrint(object):
             json.dump(d, jfile, indent=4, sort_keys=True, cls=NumpyEncoder)
 
 if __name__=="__main__":
-    from pathlib import Path
-
-    import os
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -313,14 +334,6 @@ if __name__=="__main__":
          help="Task name"
     )
     args = parser.parse_args()
-    exp = os.environ["interactiveseg_raw"]
-    
-    images = [x for x in Path(exp, args.task, "imagesTr").glob('**/*') if x.is_file()]
-    masks = [x for x in Path(exp, args.task, "labelsTr").glob('**/*') if x.is_file()]
-    annotations = [x for x in Path(exp, args.task, "interactionTr").glob('**/*') if x.is_file()]
-    
-    processed = os.environ["interactiveseg_processed"]
-    save_location = Path(processed, args.task)
-    save_location.mkdir(parents=True, exist_ok=True)
-    fingerpint = FingerPrint(sorted(images), sorted(masks), sorted(annotations), save_location)
+
+    fingerpint = FingerPrint(args.task, leave_one_out=True)
     fingerpint()
