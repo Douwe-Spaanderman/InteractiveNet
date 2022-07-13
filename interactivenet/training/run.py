@@ -1,6 +1,7 @@
 from pathlib import Path
 import numpy as np
 import os
+import json
 
 from monai.utils import set_determinism
 from monai.transforms import (
@@ -19,7 +20,7 @@ from monai.networks.nets import DynUNet
 from monai.metrics import DiceMetric
 from monai.losses import DiceCELoss
 from monai.inferers import sliding_window_inference
-from monai.data import CacheDataset, DataLoader, decollate_batch
+from monai.data import Dataset, DataLoader, decollate_batch
 
 from interactivenet.transforms.transforms import LoadPreprocessed
 from interactivenet.networks.unet import UNet
@@ -30,73 +31,42 @@ from pytorch_lightning.callbacks import LearningRateMonitor
 
 import mlflow.pytorch
 
-# Extra
-def get_kernels_strides(sizes, spacings):
-    strides, kernels = [], []
-    while True:
-        spacing_ratio = [sp / min(spacings) for sp in spacings]
-        stride = [
-            2 if ratio <= 2 and size >= 8 else 1
-            for (ratio, size) in zip(spacing_ratio, sizes)
-        ]
-        kernel = [3 if ratio <= 2 else 1 for ratio in spacing_ratio]
-        if all(s == 1 for s in stride):
-            break
-        sizes = [i / j for i, j in zip(sizes, stride)]
-        spacings = [i * j for i, j in zip(spacings, stride)]
-        kernels.append(kernel)
-        strides.append(stride)
-    strides.insert(0, len(spacings) * [1])
-    kernels.append(len(spacings) * [3])
-    return kernels, strides
-
-def get_receptive_field(kernels, strides):
-    r = [1,1,1]
-    j = [1,1,1]
-    for kernel, stride in zip(kernels, strides):
-        for axis in range(len(kernel)):
-            k = kernel[axis]
-            s = stride[axis]
-
-            # First conv
-            j[axis] = j[axis] * s
-            r[axis] = r[axis] + ((k - 1) * j[axis])
-
-            # Second conv - stride always 1
-            r[axis] = r[axis] + ((k - 1) * j[axis])
-            
-    return r
-
 class Net(pl.LightningModule):
-    def __init__(self, npz, metadata):
+    def __init__(self, data, metadata, split=0):
         super().__init__()
-        self.kernels, self.strides = get_kernels_strides((152, 144, 32), (0.703125, 0.703125, 3.84000027179718))
-        print(self.kernels, self.strides)
+        self._model = DynUNet(
+            spatial_dims=3,
+            in_channels=2,
+            out_channels=2,
+            kernel_size=metadata["Plans"]["kernels"],
+            strides=metadata["Plans"]["strides"],
+            upsample_kernel_size=metadata["Plans"]["strides"][1:],
+            filters=[4, 8, 16, 32, 64, 128],
+            act_name = 'leakyrelu',
+            deep_supervision = False,
+        )
+        """
         self._model = UNet(
             spatial_dims=3,
             in_channels=2,
             out_channels=2,
-            kernel_size=self.kernels,
-            strides=self.strides,
-            upsample_kernel_size=self.strides[1:],
+            kernel_size=metadata["Plans"]["kernels"],
+            strides=metadata["Plans"]["strides"],
+            upsample_kernel_size=metadata["Plans"]["strides"][1:],
             filters=[4, 8, 16, 32, 64, 128],
             activation = 'LRELU',
             deep_supervision = False,
         )
-        r = get_receptive_field(self.kernels, self.strides)
-        print(r)
-        exit()
-
+        """
+        self.data = data
+        self.metadata = metadata
+        self.split = split
         self.loss_function = DiceCELoss(to_onehot_y=True, softmax=True)
         self.dice_metric = DiceMetric(include_background=False, reduction="mean", get_not_nans=False)
         self.post_pred = AsDiscrete(argmax=True, to_onehot=2)
         self.post_label = AsDiscrete(to_onehot=2)
         self.best_val_dice = 0
         self.best_val_epoch = 0
-        self.data = [
-            {"npz": npz_path, "metadata": metadata_path}
-            for npz_path, metadata_path in zip(npz, metadata)
-        ]
         self.max_epochs = 3000
         self.batch_size = 1
 
@@ -109,7 +79,6 @@ class Net(pl.LightningModule):
         train_transforms = Compose(
             [
                 LoadPreprocessed(keys=["npz", "metadata"], new_keys=["image", "annotation", "mask"]),
-                SpatialPadd(keys=["image","annotation", "mask"], spatial_size=(152, 144, 32)),
                 RandGaussianNoised(keys=["image"], std=0.01, prob=0.15),
                 RandGaussianSmoothd(
                     keys=["image"],
@@ -136,11 +105,15 @@ class Net(pl.LightningModule):
             ]
         )
 
-        self.train_ds = CacheDataset(
-            data=self.data, transform=train_transforms,
+        split = self.metadata["Plans"]["splits"][self.split]
+        train_data = [x for x in self.data if x['npz'].stem in split['train']]
+        val_data = [x for x in self.data if x['npz'].stem in split['val']]
+
+        self.train_ds = Dataset(
+            data=train_data, transform=train_transforms,
         )
-        self.val_ds = CacheDataset(
-            data=self.data, transform=val_transforms,
+        self.val_ds = Dataset(
+            data=val_data, transform=val_transforms,
         )
 
     def train_dataloader(self):
@@ -211,24 +184,64 @@ class Net(pl.LightningModule):
 if __name__=="__main__":
     lr_logger = LearningRateMonitor(logging_interval="epoch")
 
-    exp = os.environ["interactiveseg_processed"]
-    task = "Task001_Lipo"
-    arrays = [x for x in Path(exp, task, "network_input").glob('**/*.npz') if x.is_file()]
-    metadata = [x for x in Path(exp, task, "network_input").glob('**/*.pkl') if x.is_file()]
-    network = Net(sorted(arrays)[0:3], sorted(metadata)[0:3])
+    import argparse
+    import os
 
+    parser = argparse.ArgumentParser(
+             description="Preprocessing of "
+         )
+    parser.add_argument(
+         "-t",
+         "--task",
+         nargs="?",
+         default="Task710_STTMRI",
+         help="Task name"
+    )
+    parser.add_argument(
+         "-f",
+         "--fold",
+         nargs="?",
+         default=0,
+         type=int,
+         help="which fold do you want to train?"
+    )
+    args = parser.parse_args()
+    exp = os.environ["interactiveseg_processed"]
+
+    arrays = [x for x in Path(exp, args.task, "network_input").glob('**/*.npz') if x.is_file()]
+    metafile = [x for x in Path(exp, args.task, "network_input").glob('**/*.pkl') if x.is_file()]
+    metadata = Path(exp, args.task, "plans.json")
+    if metadata.is_file():
+        with open(metadata) as f:
+            metadata = json.load(f)
+    else:
+        raise KeyError("metadata not found")
+
+    data = [
+            {"npz": npz_path, "metadata": metafile_path}
+            for npz_path, metafile_path in zip(sorted(arrays), sorted(metafile))
+        ]
+
+    network = Net(data, metadata, split=args.fold)
     trainer = pl.Trainer(
         gpus=-1,
-        max_epochs=3000,
+        max_epochs=500,
         num_sanity_val_steps=1,
         log_every_n_steps=50,
         check_val_every_n_epoch=1,
-        precision = 16,
         callbacks=[lr_logger],
+        accumulate_grad_batches=4,
     )
+
+    experiment_id = mlflow.get_experiment_by_name(args.task)
+    if experiment_id == None:
+        print(f"experiment_id not found will create {args.task}")
+        experiment_id = mlflow.create_experiment(args.task)
+    else: experiment_id = experiment_id.experiment_id
 
     mlflow.pytorch.autolog()
 
-    with mlflow.start_run() as run:
+    with mlflow.start_run(experiment_id=experiment_id, run_name=args.fold) as run:
+        mlflow.log_param("fold", args.fold)
         trainer.fit(network)
         mlflow.pytorch.log_state_dict(network._model.state_dict(), "final_model_state_dict")

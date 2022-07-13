@@ -101,7 +101,7 @@ class Preprocessing(_MonaiDataset):
             self.save_sample(item, name)
             print("")
 
-        with open(self.input_folder / "metadata.pkl", 'wb') as handle:
+        with open(self.save_location / "metadata.pkl", 'wb') as handle:
             pickle.dump(metainfo, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def create_directories(self) -> None:
@@ -130,7 +130,7 @@ class Preprocessing(_MonaiDataset):
 
     def save_sample(self, item:Dict[str, Union[np.ndarray, dict]], name:str) -> None:
         keys = list(item.keys())
-        objects = [False if x.endswith("_meta_dict") else True for x in keys]
+        objects = [False if x.endswith("_meta_dict") or x.endswith("_transforms") else True for x in keys]
         objects = sum(objects)
 
         np.savez(self.input_folder / name, **{key : item[key] for key in keys[:objects]})
@@ -146,14 +146,27 @@ if __name__=="__main__":
     from interactivenet.preprocessing.fingerprinting import FingerPrint
 
     import os
+    import argparse
+
+    parser = argparse.ArgumentParser(
+             description="Preprocessing of "
+         )
+    parser.add_argument(
+         "-t",
+         "--task",
+         nargs="?",
+         default="Task710_STTMRI",
+         help="Task name"
+    )
+    args = parser.parse_args()
     exp = os.environ["interactiveseg_raw"]
-    task = "Task710_STTMRI"
-    images = [x for x in Path(exp, task, "imagesTr").glob('**/*') if x.is_file()]
-    masks = [x for x in Path(exp, task, "labelsTr").glob('**/*') if x.is_file()]
-    annotations = [x for x in Path(exp, task, "interactionTr").glob('**/*') if x.is_file()]
+
+    images = [x for x in Path(exp, args.task, "imagesTr").glob('**/*') if x.is_file()]
+    masks = [x for x in Path(exp, args.task, "labelsTr").glob('**/*') if x.is_file()]
+    annotations = [x for x in Path(exp, args.task, "interactionTr").glob('**/*') if x.is_file()]
 
     processed = os.environ["interactiveseg_processed"]
-    save_location = Path(processed, task)
+    save_location = Path(processed, args.task)
     save_location.mkdir(parents=True, exist_ok=True)
 
     results = FingerPrint(sorted(images), sorted(masks), sorted(annotations), save_location)

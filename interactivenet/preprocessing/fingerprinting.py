@@ -300,14 +300,27 @@ if __name__=="__main__":
     from pathlib import Path
 
     import os
+    import argparse
+
+    parser = argparse.ArgumentParser(
+             description="Preprocessing of "
+         )
+    parser.add_argument(
+         "-t",
+         "--task",
+         nargs="?",
+         default="Task710_STTMRI",
+         help="Task name"
+    )
+    args = parser.parse_args()
     exp = os.environ["interactiveseg_raw"]
-    task = "Task001_Lipo"
-    images = [x for x in Path(exp, task, "imagesTr").glob('**/*') if x.is_file()]
-    masks = [x for x in Path(exp, task, "labelsTr").glob('**/*') if x.is_file()]
-    annotations = [x for x in Path(exp, task, "interactionTr").glob('**/*') if x.is_file()]
+    
+    images = [x for x in Path(exp, args.task, "imagesTr").glob('**/*') if x.is_file()]
+    masks = [x for x in Path(exp, args.task, "labelsTr").glob('**/*') if x.is_file()]
+    annotations = [x for x in Path(exp, args.task, "interactionTr").glob('**/*') if x.is_file()]
     
     processed = os.environ["interactiveseg_processed"]
-    save_location = Path(processed, task)
+    save_location = Path(processed, args.task)
     save_location.mkdir(parents=True, exist_ok=True)
     fingerpint = FingerPrint(sorted(images), sorted(masks), sorted(annotations), save_location)
     fingerpint()
