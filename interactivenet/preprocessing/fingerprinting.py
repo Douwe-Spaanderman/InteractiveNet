@@ -106,6 +106,7 @@ class FingerPrint(object):
         print(f"- using {self.folds} folds")
         print(f"- using the following splits: {self.splits}")
         print("\n")
+        self.save()
 
     def get_files(self):
         self.exp = Path(os.environ["interactiveseg_raw"], self.task)
@@ -271,7 +272,9 @@ class FingerPrint(object):
             keys = list(metadata.keys())
             for idx, key in enumerate(keys):
                 train_keys = keys[:idx] + keys[idx+1 :]
-                split.append({"train":[metadata[k] for k in train_keys],"val":metadata[key], "left out":key})
+                train_list = [metadata[k] for k in train_keys]
+                train_list = [x for xs in train_list for x in xs]
+                split.append({"train":train_list,"val":metadata[key], "left out":key})
 
             values = [x for xs in metadata.values() for x in xs]
             if not all([name in values for name in self.names]):

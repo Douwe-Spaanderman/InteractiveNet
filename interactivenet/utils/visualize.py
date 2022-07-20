@@ -16,6 +16,7 @@ def pol2cart(rho, phi):
 
 
 def ImagePlot(img, GT, annotation=None, additional_scans=None, distancemap=False, CT=False, radius=1, zoom=False, show=None, save=None, save_type='png', colors=['dodgerblue', 'magenta', 'cyan', 'navy', 'purple']):
+    plt.close("all")
     if not isinstance(object, list):
         segs = [GT]
     else:
@@ -116,3 +117,6 @@ def ImagePlot(img, GT, annotation=None, additional_scans=None, distancemap=False
         if save:
             f.savefig(save / f'{name}_zoomed.{save_type}')
             plt.close("all")
+    
+    return f
+

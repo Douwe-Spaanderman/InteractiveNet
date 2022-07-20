@@ -6,6 +6,7 @@ from pathlib import Path
 from monai.transforms.transform import MapTransform
 import numpy as np
 import GeodisTK
+import dijkstra3d
 from interactivenet.utils.resample import resample_image, resample_label, resample_annotation
 from interactivenet.utils.visualize import ImagePlot
 
@@ -237,11 +238,15 @@ class EGDMapd(MapTransform):
                 for idx in range(d[key].shape[0]):
                     GD = GeodisTK.geodesic3d_raster_scan(d[self.image][idx].astype(np.float32), d[key][idx].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
                     if self.logscale == True:
-                        d[key][idx, :, :, :] = np.exp(-GD)
+                        GD = np.exp(-GD)
+
+                    d[key][idx, :, :, :] = GD
             else:
                 GD = GeodisTK.geodesic3d_raster_scan(d[self.image].astype(np.float32), d[key].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
                 if self.logscale == True:
-                    d[key] = np.exp(-GD)
+                    GD = np.exp(-GD)
+
+                d[key] = GD
             
         print(f"Geodesic Distance Map with lamd: {self.lamb}, iter: {self.iter} and logscale: {self.logscale}")
         return d

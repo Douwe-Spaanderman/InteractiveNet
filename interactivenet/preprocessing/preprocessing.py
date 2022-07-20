@@ -63,14 +63,15 @@ class Preprocessing(_MonaiDataset):
                 ),
                 Visualized(
                     keys=["image", "annotation", "mask"],
-                    save=self.save_location / 'verbose' / 'new',
-                    annotation=True,
+                    save=self.save_location / 'verbose' / 'raw',
+                    annotation=True
                 ),
                 EGDMapd(
                     keys=["annotation"],
                     image="image",
                     lamb=1,
                     iter=4,
+                    logscale=True,
                 ),
                 DivisiblePadd(
                     keys=["image", "annotation", "mask"],
@@ -78,7 +79,7 @@ class Preprocessing(_MonaiDataset):
                 ),
                 Visualized(
                     keys=["image", "annotation", "mask"],
-                    save=self.save_location / 'verbose' / 'EGD',
+                    save=self.save_location / 'verbose' / 'Map',
                     distancemap=True,
                 ),
                 ]

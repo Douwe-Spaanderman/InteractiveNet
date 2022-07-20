@@ -242,6 +242,7 @@ if __name__=="__main__":
     mlflow.pytorch.autolog()
 
     with mlflow.start_run(experiment_id=experiment_id, run_name=args.fold) as run:
+        mlflow.set_tag('Mode', 'training')
         mlflow.log_param("fold", args.fold)
         trainer.fit(network)
         mlflow.pytorch.log_state_dict(network._model.state_dict(), "final_model_state_dict")
