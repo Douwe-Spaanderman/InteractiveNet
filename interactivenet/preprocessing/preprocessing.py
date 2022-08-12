@@ -78,7 +78,7 @@ class Preprocessing(_MonaiDataset):
                     k=self.divisble_using
                 ),
                 Visualized(
-                    keys=["image", "annotation", "mask"],
+                    keys=["annotation", "mask"],
                     save=self.save_location / 'verbose' / 'Map',
                     distancemap=True,
                 ),

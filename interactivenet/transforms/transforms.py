@@ -6,7 +6,6 @@ from pathlib import Path
 from monai.transforms.transform import MapTransform
 import numpy as np
 import GeodisTK
-import dijkstra3d
 from interactivenet.utils.resample import resample_image, resample_label, resample_annotation
 from interactivenet.utils.visualize import ImagePlot
 
@@ -23,7 +22,7 @@ class Visualized(MapTransform):
         annotation=None,
         distancemap=False,
         CT=False,
-        save=None
+        save=None,
     ) -> None:
         super().__init__(keys)
         self.keys = keys
@@ -43,8 +42,16 @@ class Visualized(MapTransform):
                 self.additional = self.keys[3:]
                 self.additional = [d[f'{x}'] for x in self.additional]
 
-            image, annotation, label = self.keys[:3]
-            annotation = [d[f'{annotation}']]
+            if self.distancemap:
+                image, label = self.keys[:2]
+                if self.annotation:
+                    annotation = [d[f'{annotation}_backup']]
+                else:
+                    annotation = None
+            else:
+                image, annotation, label = self.keys[:3]
+                annotation = [d[f"{annotation}"]]
+
         else:
             if len(self.keys) > 2:
                 self.additional = self.keys[2:]
@@ -55,14 +62,13 @@ class Visualized(MapTransform):
 
         if self.save:
             save = self.save / Path(d[f'{label}_meta_dict']["filename_or_obj"]).name.split('.')[0]
+        else:
+            save = None
 
         image = d[f'{image}']
         label = d[f'{label}']
 
-        if self.distancemap:
-            ImagePlot(image, label, annotation=annotation, additional_scans=self.additional, distancemap=self.distancemap, save=save)
-        else:
-            ImagePlot(image, label, annotation=annotation, additional_scans=self.additional, CT=self.CT, save=save)
+        ImagePlot(image, label, annotation=annotation, additional_scans=self.additional, CT=self.CT, save=save, show=False)
 
         return d
 
@@ -213,6 +219,7 @@ class EGDMapd(MapTransform):
         lamb=1,
         iter=4,
         logscale=True,
+        backup=False,
     ) -> None:
         super().__init__(keys)
         self.keys = keys
@@ -220,10 +227,10 @@ class EGDMapd(MapTransform):
         self.lamb = lamb
         self.iter = iter
         self.logscale = logscale
+        self.backup = backup
 
     def __call__(self, data):
         d = dict(data)
-        output = []
         data_type = None
         keys = list(self.key_iterator(d))
         for key in keys:
@@ -231,9 +238,11 @@ class EGDMapd(MapTransform):
                 data_type = type(d[key])
             elif not isinstance(d[key], data_type):
                 raise TypeError("All items in data must have the same type.")
-            output.append(d[key])
 
         for key in self.keys:
+            if self.backup:
+                d[f"{key}_backup"] = d[key].copy()
+
             if len(d[key].shape) == 4:
                 for idx in range(d[key].shape[0]):
                     GD = GeodisTK.geodesic3d_raster_scan(d[self.image][idx].astype(np.float32), d[key][idx].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
@@ -445,7 +454,7 @@ class LoadPreprocessed(MapTransform):
                         new_d[new_key] = image_data[new_key]
 
                 else:
-                    warning.warn("old keys do not match new keys, however were the right length so just applying it in order")
+                    warnings.warn("old keys do not match new keys, however were the right length so just applying it in order")
                     for old_key, new_key in zip(old_keys, self.new_keys):
                         new_d[new_key] = image_data[old_key]
 
@@ -460,7 +469,7 @@ class LoadPreprocessed(MapTransform):
                         new_d[new_key] = metadata[new_key]
 
                 else:
-                    warning.warn("old keys do not match new keys, however were the right length so just applying it in order")
+                    warnings.warn("old keys do not match new keys, however were the right length so just applying it in order")
                     for old_key, new_key in zip(old_keys, self.meta_keys):
                         new_d[new_key] = metadata[old_key]
             else:

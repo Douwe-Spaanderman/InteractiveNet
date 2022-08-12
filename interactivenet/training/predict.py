@@ -3,18 +3,13 @@ import numpy as np
 import os
 import pickle
 import json
+import matplotlib.pyplot as plt
 
 from monai.utils import set_determinism
 from monai.transforms import (
     AsDiscrete,
     Compose,
-    RandFlipd,
-    RandScaleIntensityd,
-    ConcatItemsd,
     ToTensord,
-    SpatialPadd,
-    RandGaussianNoised,
-    RandGaussianSmoothd,
     Compose,
     LoadImaged,
     EnsureChannelFirstd,
@@ -23,21 +18,17 @@ from monai.transforms import (
     CastToTyped,
 )
 
-from monai.networks.nets import DynUNet
+
 from monai.metrics import DiceMetric
-from monai.losses import DiceCELoss
-from monai.inferers import sliding_window_inference
 from monai.data import Dataset, DataLoader, decollate_batch
 from monai.metrics import compute_meandice, compute_average_surface_distance
 
-from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd, Visualized
+from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd
 from interactivenet.utils.visualize import ImagePlot
 from interactivenet.utils.statistics import ResultPlot
-from interactivenet.networks.unet import UNet
 
 import torch
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import LearningRateMonitor
 
 import mlflow.pytorch
 from mlflow.utils.mlflow_tags import MLFLOW_PARENT_RUN_ID
@@ -179,8 +170,6 @@ if __name__=="__main__":
         types = False
         unseen = [False] * len(runs)
 
-    print(runs)
-    exit()
     for idx, run in runs.iterrows():
         if "tags.mlflow.parentRunId" in run:
             if run["tags.mlflow.parentRunId"] != None:
@@ -217,9 +206,11 @@ if __name__=="__main__":
             mlflow.log_metric("Std dice", np.std(list(dices.values())))
 
             f = ResultPlot(dices, "Dice", types, unseen[int(fold)])
+            plt.close("all")
             mlflow.log_figure(f, f"dice.png")
             mlflow.log_dict(dices, "dice.json")
 
             f = ResultPlot(surface, "Surface Distance", types, unseen[int(fold)])
+            plt.close("all")
             mlflow.log_figure(f, f"surface_distance.png")
             mlflow.log_dict(surface, "surface_distance.json")
