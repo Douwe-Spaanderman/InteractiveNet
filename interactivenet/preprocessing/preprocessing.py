@@ -58,8 +58,8 @@ class Preprocessing(_MonaiDataset):
                 ),
                 NormalizeIntensityd(
                     keys=["image"],
-                    nonzero=False,
-                    channel_wise=False,
+                    nonzero=True,
+                    channel_wise=True,
                 ),
                 Visualized(
                     keys=["image", "annotation", "mask"],

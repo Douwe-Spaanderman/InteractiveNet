@@ -37,10 +37,9 @@ from mlflow.utils.mlflow_tags import MLFLOW_PARENT_RUN_ID
 class Net(pl.LightningModule):
     def __init__(self, data, metadata, model):
         super().__init__()
-        self._model = mlflow.pytorch.load_model(model, map_location=torch.device('cpu'))
+        self._model = mlflow.pytorch.load_model(model, map_location=torch.device('cuda'))
         self.data = data
         self.metadata = metadata
-        self.dice_metric = DiceMetric(include_background=False, reduction="mean", get_not_nans=False)
         self.post_pred = AsDiscrete(argmax=True, to_onehot=2)
         self.post_label = AsDiscrete(to_onehot=2)
         self.batch_size = 1
@@ -67,8 +66,8 @@ class Net(pl.LightningModule):
                 ),
                 NormalizeIntensityd(
                     keys=["image"],
-                    nonzero=False,
-                    channel_wise=False,
+                    nonzero=True,
+                    channel_wise=True,
                 ),
                 EGDMapd(
                     keys=["annotation"],
@@ -100,13 +99,12 @@ class Net(pl.LightningModule):
 
     def predict_step(self, batch, batch_idx):
         images, labels = batch["image"], batch["mask"]
-        print(images.shape)
         outputs = self.forward(images)
+        weights = [i for i in decollate_batch(outputs)]
         outputs = [self.post_pred(i) for i in decollate_batch(outputs)]
         labels = [self.post_label(i) for i in decollate_batch(labels)]
-        self.dice_metric(y_pred=outputs, y=labels)
 
-        return images, labels, outputs, batch["mask_meta_dict"]
+        return images, labels, outputs, weights, batch["mask_meta_dict"]
 
 if __name__=="__main__":
     import argparse
@@ -128,6 +126,13 @@ if __name__=="__main__":
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Do you want to splits classes"
+    )
+    parser.add_argument(
+        "-w",
+        "--weights",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Do you want to save weights as .npy in order to ensembling?"
     )
 
     args = parser.parse_args()
@@ -192,7 +197,7 @@ if __name__=="__main__":
             dices = {}
             hausdorff = {}
             surface = {}
-            for image, label, output, meta in outputs:
+            for image, label, output, weights, meta in outputs:
                 name = Path(meta["filename_or_obj"][0]).name.split('.')[0]
                 save = Path(results, fold, name)
 
@@ -207,6 +212,17 @@ if __name__=="__main__":
 
                 f = ImagePlot(image[0][:1].numpy(), output[0][1:].numpy())
                 mlflow.log_figure(f, f"images/{name}.png")
+
+                if args.weights:
+                    weights = weights[0].detach().cpu().numpy()
+                    tmp_dir = Path(exp, "tmp")
+                    tmp_dir.mkdir(parents=True, exist_ok=True)
+                    weights_file = tmp_dir / f"{name}.npy"
+
+                    np.save(str(weights_file), weights)
+                    mlflow.log_artifact(str(weights_file), artifact_path="weights")
+                    
+                    weights_file.unlink()
 
             mlflow.log_metric("Mean dice", np.mean(list(dices.values())))
             mlflow.log_metric("Std dice", np.std(list(dices.values())))
