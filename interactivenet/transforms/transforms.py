@@ -192,7 +192,7 @@ class Resamplingd(MapTransform):
         elif "point" in self.keys:
             d["point"] = annotation
             d["point_meta_dict"].update(new_meta)
-            
+
         if "label" in self.keys:
             d["label"] = label
             d["label_meta_dict"].update(new_meta)
@@ -256,7 +256,7 @@ class EGDMapd(MapTransform):
                     GD = np.exp(-GD)
 
                 d[key] = GD
-            
+
         print(f"Geodesic Distance Map with lamd: {self.lamb}, iter: {self.iter} and logscale: {self.logscale}")
         return d
 
@@ -326,6 +326,12 @@ class BoudingBoxd(MapTransform):
                 bbox[1][2] + relaxation[2],
             ]
         ])
+        for axis in range(len(bbox[0])):
+            if bbox[0,axis] == bbox[1,axis]:
+                bbox[0,axis] = bbox[0,axis] - 1
+                bbox[1,axis] = bbox[1,axis] + 1
+                warnings.warn(f"Bounding box has the same size in {axis} axis so extending axis by 1 both direction")
+
         # Remove below zero and higher than shape because of relaxation
         bbox[bbox < 0] = 0
         largest_dimension = [int(x) if  x <= data.shape[i] else data.shape[i] for i, x in enumerate(bbox[1])]
@@ -403,7 +409,7 @@ class BoudingBoxd(MapTransform):
                 d[key] = np.stack(new_dkey, axis=0)
             else:
                 d[key] = self.extract_bbox_region(d[key], final_bbox)
-            
+
             d[f"{key}_meta_dict"]["bbox"] = bbox
             d[f"{key}_meta_dict"]["bbox_shape"] = bbox_shape
             d[f"{key}_meta_dict"]["bbox_relaxation"] = self.relaxation
@@ -428,7 +434,7 @@ class LoadPreprocessed(MapTransform):
         self.keys = keys
         if len(self.keys) != 2:
             raise ValueError(f"LoadPreprocessed data assumes the data has 2 keys with npz and metadata, this is not the case as there are {len(self.keys)} provided")
-        
+
         self.new_keys = new_keys
         self.meta_keys = [x + "_meta_dict" for x in new_keys] + [x + "_transforms" for x in new_keys]
 
@@ -474,5 +480,5 @@ class LoadPreprocessed(MapTransform):
                         new_d[new_key] = metadata[old_key]
             else:
                 raise ValueError("Neither npz or pkl in preprocessed loader")
-            
+
         return new_d

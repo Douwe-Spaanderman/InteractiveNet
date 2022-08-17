@@ -24,6 +24,7 @@ class MaskItem(object):
         self.Direction = self.Image.GetDirection()
         self.Image = self._from_simpleITK(self.Image)
         self.Dimensions = self.Mask.shape
+        print(self.Mask.shape)
         self.inds_z, self.inds_y, self.inds_x = np.where(self.Mask > 0.5)
         self.Cropped = False
         self.RandomPoints = None
@@ -133,6 +134,7 @@ class MaskItem(object):
 
         self.Cropped = True
         self.Dimensions = self.Mask.shape
+        print(self.Mask.shape())
         self.inds_z, self.inds_y, self.inds_x = np.where(self.Mask > 0.5)
 
         if self.NewMask is not None:
@@ -142,7 +144,7 @@ class MaskItem(object):
                 self.BoudingBox[0][1]:self.BoudingBox[1][1],
                 self.BoudingBox[0][2]:self.BoudingBox[1][2]
                 ]
-            
+
             return self.NewMask
 
     def points_in_mask(self, points, move):
@@ -156,7 +158,7 @@ class MaskItem(object):
                     tmpinfo = _indexinfo[i]
                     _error += tmpinfo[1]
                     point[tmpinfo[0]] = point[tmpinfo[0]] + tmpinfo[1]
-                    
+
                     if abs(_error) > move[tmpinfo[0]]:
                         raise KeyError("move is to big for points in masks")
                 else:
@@ -227,7 +229,7 @@ class MaskItem(object):
         for i, point_map in enumerate(overlap):
             for point in point_map:
                 self.ShowMask[point[0], point[1], point[2]] = color[i]
-        
+
     def show(self, overlap=None, CT=False, show=True, save=None) -> None:
         ImagePlot(self.Image, self.ShowMask, annotation=overlap, CT=CT, show=show, save=save)
 
@@ -265,7 +267,7 @@ def create_sample(input_mask, input_image=None, border=None, extreme_points=None
             tmp.mkdir(parents=True, exist_ok=True)
 
         data.save(save, mode=mode)
-    
+
     print('Plotting is not working atm')
     """
     if plot and save:
@@ -366,7 +368,7 @@ def main():
     # This is stupid but whatever
     if args.extreme_points and len(args.extreme_points) != 3:
         raise KeyError(f"argument extreme_points (-e) should either be None or a list of 3 not: {args.extreme_points}")
-    
+
     output_folder = Path(args.outpath, args.name)
     Dataset_numb = 0
     for mode in ["Tr", "Ts"]:

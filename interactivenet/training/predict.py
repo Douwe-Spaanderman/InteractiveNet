@@ -12,6 +12,7 @@ from monai.transforms import (
     ToTensord,
     Compose,
     LoadImaged,
+    ConcatItemsd,
     EnsureChannelFirstd,
     NormalizeIntensityd,
     DivisiblePadd,
@@ -21,7 +22,7 @@ from monai.transforms import (
 
 from monai.metrics import DiceMetric
 from monai.data import Dataset, DataLoader, decollate_batch
-from monai.metrics import compute_meandice, compute_average_surface_distance
+from monai.metrics import compute_meandice, compute_average_surface_distance, compute_hausdorff_distance
 
 from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd
 from interactivenet.utils.visualize import ImagePlot
@@ -81,7 +82,7 @@ class Net(pl.LightningModule):
                     k=[16, 16, 4]
                 ),
                 CastToTyped(keys=["image", "annotation", "mask"], dtype=(np.float32, np.float32, np.uint8)),
-                #ConcatItemsd(keys=["image", "annotation"], name="image"),
+                ConcatItemsd(keys=["image", "annotation"], name="image"),
                 ToTensord(keys=["image", "mask"]),
             ]
         )
@@ -99,6 +100,7 @@ class Net(pl.LightningModule):
 
     def predict_step(self, batch, batch_idx):
         images, labels = batch["image"], batch["mask"]
+        print(images.shape)
         outputs = self.forward(images)
         outputs = [self.post_pred(i) for i in decollate_batch(outputs)]
         labels = [self.post_label(i) for i in decollate_batch(labels)]
@@ -127,13 +129,14 @@ if __name__=="__main__":
         default=False,
         help="Do you want to splits classes"
     )
+
     args = parser.parse_args()
     exp = os.environ["interactiveseg_processed"]
     raw = Path(os.environ["interactiveseg_raw"], args.task)
 
     results = Path(os.environ["interactiveseg_results"], args.task)
     results.mkdir(parents=True, exist_ok=True)
-    
+
     images = sorted([x for x in (raw / "imagesTs").glob('**/*') if x.is_file()])
     masks = sorted([x for x in (raw / "labelsTs").glob('**/*') if x.is_file()])
     annotations = sorted([x for x in (raw / "interactionTs").glob('**/*') if x.is_file()])
@@ -163,7 +166,6 @@ if __name__=="__main__":
             with open(types) as f:
                 types = json.load(f)
                 types = {v: key for key, value in types.items() for v in value}
-                unseen = [{d["left out"]: False} for d in metadata["Plans"]["splits"]]
         else:
             raise KeyError("types file not found")
     else:
@@ -181,13 +183,14 @@ if __name__=="__main__":
         network = Net(data, metadata, model)
 
         trainer = pl.Trainer(
-            gpus=0,
+            gpus=-1,
         )
 
         with mlflow.start_run(experiment_id=experiment_id, tags={MLFLOW_PARENT_RUN_ID: run_id}) as run:
             mlflow.set_tag('Mode', 'testing')
             outputs = trainer.predict(model=network)
             dices = {}
+            hausdorff = {}
             surface = {}
             for image, label, output, meta in outputs:
                 name = Path(meta["filename_or_obj"][0]).name.split('.')[0]
@@ -196,21 +199,29 @@ if __name__=="__main__":
                 dice = compute_meandice(output[0][None,:], label[0][None,:], include_background=False)
                 dices[name] = dice.item()
 
+                hausdorff_distance = compute_hausdorff_distance(output[0][None,:], label[0][None,:], include_background=False)
+                hausdorff[name] = hausdorff_distance.item()
+
                 surface_distance = compute_average_surface_distance(output[0][None,:], label[0][None,:], include_background=False)
                 surface[name] = surface_distance.item()
-                
+
                 f = ImagePlot(image[0][:1].numpy(), output[0][1:].numpy())
                 mlflow.log_figure(f, f"images/{name}.png")
 
             mlflow.log_metric("Mean dice", np.mean(list(dices.values())))
             mlflow.log_metric("Std dice", np.std(list(dices.values())))
 
-            f = ResultPlot(dices, "Dice", types, unseen[int(fold)])
+            f = ResultPlot(dices, "Dice", types)
             plt.close("all")
             mlflow.log_figure(f, f"dice.png")
             mlflow.log_dict(dices, "dice.json")
 
-            f = ResultPlot(surface, "Surface Distance", types, unseen[int(fold)])
+            f = ResultPlot(hausdorff, "Hausdorff Distance", types)
+            plt.close("all")
+            mlflow.log_figure(f, f"hausdorff_distance.png")
+            mlflow.log_dict(hausdorff, "hausdorff_distance.json")
+
+            f = ResultPlot(surface, "Surface Distance", types)
             plt.close("all")
             mlflow.log_figure(f, f"surface_distance.png")
             mlflow.log_dict(surface, "surface_distance.json")
