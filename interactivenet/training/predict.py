@@ -19,8 +19,6 @@ from monai.transforms import (
     CastToTyped,
 )
 
-
-from monai.metrics import DiceMetric
 from monai.data import Dataset, DataLoader, decollate_batch
 from monai.metrics import compute_meandice, compute_average_surface_distance, compute_hausdorff_distance
 
@@ -178,9 +176,8 @@ if __name__=="__main__":
         unseen = [False] * len(runs)
 
     for idx, run in runs.iterrows():
-        if "tags.mlflow.parentRunId" in run:
-            if run["tags.mlflow.parentRunId"] != None:
-                continue
+        if run["tags.Mode"] != "training":
+            continue
 
         run_id = run["run_id"]
         fold = run["params.fold"]
@@ -199,7 +196,6 @@ if __name__=="__main__":
             surface = {}
             for image, label, output, weights, meta in outputs:
                 name = Path(meta["filename_or_obj"][0]).name.split('.')[0]
-                save = Path(results, fold, name)
 
                 dice = compute_meandice(output[0][None,:], label[0][None,:], include_background=False)
                 dices[name] = dice.item()
@@ -210,19 +206,22 @@ if __name__=="__main__":
                 surface_distance = compute_average_surface_distance(output[0][None,:], label[0][None,:], include_background=False)
                 surface[name] = surface_distance.item()
 
-                f = ImagePlot(image[0][:1].numpy(), output[0][1:].numpy())
+                f = ImagePlot(image[0][:1].numpy(), label[0].numpy(), [output[0][1:].numpy()])
                 mlflow.log_figure(f, f"images/{name}.png")
 
                 if args.weights:
-                    weights = weights[0].detach().cpu().numpy()
                     tmp_dir = Path(exp, "tmp")
                     tmp_dir.mkdir(parents=True, exist_ok=True)
-                    weights_file = tmp_dir / f"{name}.npy"
+                    data_file = tmp_dir / f"{name}.npz"
 
-                    np.save(str(weights_file), weights)
-                    mlflow.log_artifact(str(weights_file), artifact_path="weights")
+                    image = image[0].detach().cpu().numpy()
+                    label = label[0].detach().cpu().numpy()
+                    weights = weights[0].detach().cpu().numpy()
+
+                    np.savez(str(data_file), image=image, label=label, weights=weights)
+                    mlflow.log_artifact(str(data_file), artifact_path="weights")
                     
-                    weights_file.unlink()
+                    data_file.unlink()
 
             mlflow.log_metric("Mean dice", np.mean(list(dices.values())))
             mlflow.log_metric("Std dice", np.std(list(dices.values())))
