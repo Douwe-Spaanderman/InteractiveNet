@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 
 from monai.transforms.transform import MapTransform
+from monai.transforms import NormalizeIntensity, GaussianSmooth
 import numpy as np
 import GeodisTK
 from interactivenet.utils.resample import resample_image, resample_label, resample_annotation
@@ -69,6 +70,53 @@ class Visualized(MapTransform):
         label = d[f'{label}']
 
         ImagePlot(image, label, annotation=annotation, additional_scans=self.additional, CT=self.CT, save=save, show=False)
+
+        return d
+
+class NormalizeValuesd(MapTransform):
+    """
+        This transform class takes NNUNet's preprocessing method for reference.
+        That code is in:
+        https://github.com/MIC-DKFZ/nnUNet/blob/master/nnunet/preprocessing/preprocessing.py
+    """
+
+    def __init__(
+        self,
+        keys,
+        clipping=[],
+        mean=0,
+        std=0,
+        nonzero=True,
+        channel_wise=True,
+    ) -> None:
+        super().__init__(keys)
+        self.keys = keys
+        self.nonzero = nonzero
+        self.channel_wise = channel_wise
+        self.clipping = clipping
+        self.mean = mean
+        self.std = std
+        self.normalize_intensity = NormalizeIntensity(nonzero=True, channel_wise=True)
+
+    def __call__(self, data):
+        d = dict(data)
+        data_type = None
+        keys = list(self.key_iterator(d))
+        for key in keys:
+            if data_type is None:
+                data_type = type(d[key])
+            elif not isinstance(d[key], data_type):
+                raise TypeError("All items in data must have the same type.")
+
+        for key in self.keys:
+            image = d[key]
+            if self.clipping:
+                image = np.clip(image, self.clipping[0], self.clipping[1])
+                image = (image - self.mean) / self.std
+            else:
+                image = self.normalize_intensity(image.copy())
+                
+            d[key] = image
 
         return d
 
@@ -219,6 +267,7 @@ class EGDMapd(MapTransform):
         lamb=1,
         iter=4,
         logscale=True,
+        ct=False,
         backup=False,
     ) -> None:
         super().__init__(keys)
@@ -228,6 +277,8 @@ class EGDMapd(MapTransform):
         self.iter = iter
         self.logscale = logscale
         self.backup = backup
+        self.ct = ct
+        self.gaussiansmooth = GaussianSmooth(sigma=2)
 
     def __call__(self, data):
         d = dict(data)
@@ -245,13 +296,21 @@ class EGDMapd(MapTransform):
 
             if len(d[key].shape) == 4:
                 for idx in range(d[key].shape[0]):
-                    GD = GeodisTK.geodesic3d_raster_scan(d[self.image][idx].astype(np.float32), d[key][idx].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
+                    image = d[self.image][idx]
+                    if self.ct:
+                        image = self.gaussiansmooth(image.copy())
+
+                    GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key][idx].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
                     if self.logscale == True:
                         GD = np.exp(-GD)
 
                     d[key][idx, :, :, :] = GD
             else:
-                GD = GeodisTK.geodesic3d_raster_scan(d[self.image].astype(np.float32), d[key].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
+                image = d[self.image]
+                if self.ct:
+                    image = self.gaussiansmooth(image.copy())
+
+                GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
                 if self.logscale == True:
                     GD = np.exp(-GD)
 

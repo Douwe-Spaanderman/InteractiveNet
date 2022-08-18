@@ -18,6 +18,7 @@ class FingerPrint(object):
         relax_bbox:float=0.1,
         seed:Union[int, None]=None,
         folds:int=5,
+        ct:bool=False,
         leave_one_out:bool=False,
     ) -> None:
         print("Initializing Fingerprinting")
@@ -27,6 +28,7 @@ class FingerPrint(object):
         self.relax_bbox = relax_bbox
         self.seed = seed
         self.folds = folds
+        self.ct = ct
         self.leave_one_out = leave_one_out
         self.sanity_files()
 
@@ -36,6 +38,13 @@ class FingerPrint(object):
         self.anisotrophy = []
         self.names = []
         self.bbox = []
+        self.clipping = []
+        if self.ct:
+            self.intensity_mean = []
+            self.intensity_std = []
+        else:
+            self.intensity_mean = 0
+            self.intensity_std = 0
 
     def __call__(self):
         print("Starting Fingerprinting: \n")
@@ -57,6 +66,7 @@ class FingerPrint(object):
             self.anisotrophy.append(self.check_anisotrophy(spacing))
             self.orientation.append(nib.orientations.aff2axcodes(img.affine))
             self.sanity_annotation_in_mask(mask, annot)
+            self.get_normalization_strategy(img, mask, self.ct)
 
             bbox = self.calculate_bbox(mask)
             self.bbox.append(bbox[1] - bbox[0])
@@ -66,6 +76,14 @@ class FingerPrint(object):
         print("- Database Structure: Correct")
         print(f"- All annotions in mask: {self.in_mask}")
         print(f"- All images anisotropic: {all(self.anisotrophy)}")
+
+        if self.ct:
+            self.clipping = [median(x) for x in zip(*self.clipping)]
+            self.intensity_mean = median(self.intensity_mean)
+            self.intensity_std = median(self.intensity_std)
+            print("- CT: True")
+            print(f"- Clipping to values: {self.clipping}")
+            print(f"- Mean and stdev: {self.intensity_mean}, {self.intensity_std}")
 
         # Spacing
         self.target_spacing, self.resample_strategy = self.get_resampling_strategy(self.pixdim)
@@ -178,6 +196,14 @@ class FingerPrint(object):
             strategy = "Anisotropic"
 
         return tuple(target_spacing), strategy
+
+    def get_normalization_strategy(self, img, mask, ct:bool=False):
+        if ct:
+            points = np.where(mask.get_fdata() > 0.5)
+            points = img.get_fdata()[points]
+            self.clipping.append([np.percentile(points, 0.5), np.percentile(points, 99.5)])
+            self.intensity_mean.append(np.mean(points))
+            self.intensity_std.append(np.std(points))
 
     def get_kernels_strides(self, sizes, spacings):
         strides, kernels = [], []
@@ -336,7 +362,21 @@ if __name__=="__main__":
          default="Task710_STTMRI",
          help="Task name"
     )
+    parser.add_argument(
+        "-o",
+        "--leave_one_out",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Do you want to do leave one out experiments?"
+    )
+    parser.add_argument(
+        "-c",
+        "--CT",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="is the data CT?"
+    )
     args = parser.parse_args()
 
-    fingerpint = FingerPrint(args.task, leave_one_out=True)
+    fingerpint = FingerPrint(args.task, ct=args.CT, leave_one_out=args.leave_one_out)
     fingerpint()

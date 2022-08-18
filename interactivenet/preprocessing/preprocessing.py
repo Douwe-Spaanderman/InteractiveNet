@@ -11,11 +11,10 @@ from monai.transforms import (
     Compose,
     LoadImaged,
     EnsureChannelFirstd,
-    NormalizeIntensityd,
-    DivisiblePadd,
+    DivisiblePadd
 )
 
-from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd, Visualized
+from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd, Visualized, NormalizeValuesd
 
 class Preprocessing(_MonaiDataset):
     def __init__(
@@ -24,7 +23,10 @@ class Preprocessing(_MonaiDataset):
         median_shape: Tuple[float],
         target_spacing: Tuple[float],
         relax_bbox: Union[float, Tuple[float]] = 0.1,
-        divisble_using: Union[int, Tuple[int]] = (16, 16, 8)
+        divisble_using: Union[int, Tuple[int]] = (16, 16, 8),
+        clipping: List[float] = [],
+        intensity_mean: float = 0, 
+        intensity_std: float = 0,
     ) -> None:
         print("Initializing Preprocessing")
         self.task = task
@@ -32,6 +34,14 @@ class Preprocessing(_MonaiDataset):
 
         self.relax_bbox = relax_bbox
         self.divisble_using = divisble_using
+        self.clipping = clipping
+        self.intensity_mean = intensity_mean
+        self.intensity_std = intensity_std
+        if self.clipping:
+            self.ct = True
+        else:
+            self.ct = False
+        
         self.data = [
             {"image": img_path, "mask": mask_path, "annotation": annot_path}
             for img_path, mask_path, annot_path in zip(self.images, self.masks, self.annotations)
@@ -56,14 +66,15 @@ class Preprocessing(_MonaiDataset):
                     relaxation=self.relax_bbox,
                     divisiblepadd=self.divisble_using,
                 ),
-                NormalizeIntensityd(
+                NormalizeValuesd(
                     keys=["image"],
-                    nonzero=True,
-                    channel_wise=True,
+                    clipping=self.clipping,
+                    mean=self.intensity_mean,
+                    std=self.intensity_std,
                 ),
                 Visualized(
                     keys=["image", "annotation", "mask"],
-                    save=self.save_location / 'verbose' / 'raw',
+                    save=self.save_location / 'verbose' / 'processed',
                     annotation=True
                 ),
                 EGDMapd(
@@ -72,6 +83,7 @@ class Preprocessing(_MonaiDataset):
                     lamb=1,
                     iter=4,
                     logscale=True,
+                    ct=self.ct
                 ),
                 DivisiblePadd(
                     keys=["image", "annotation", "mask"],
@@ -175,9 +187,16 @@ if __name__=="__main__":
         default=False,
         help="Do you want to do leave one out experiments?"
     )
+    parser.add_argument(
+        "-c",
+        "--C",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="is the data CT?"
+    )
     args = parser.parse_args()
 
-    results = FingerPrint(args.task, leave_one_out=args.leave_one_out)
+    results = FingerPrint(args.task, ct=args.CT, leave_one_out=args.leave_one_out)
     results()
-    prepro = Preprocessing(args.task, results.dim, results.target_spacing, results.relax_bbox, results.divisible_by)
+    prepro = Preprocessing(args.task, results.dim, results.target_spacing, results.relax_bbox, results.divisible_by, results.clipping, results.intensity_mean, results.intensity_std)
     prepro()
