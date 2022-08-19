@@ -115,7 +115,7 @@ class NormalizeValuesd(MapTransform):
                 image = (image - self.mean) / self.std
             else:
                 image = self.normalize_intensity(image.copy())
-                
+
             d[key] = image
 
         return d
@@ -278,7 +278,7 @@ class EGDMapd(MapTransform):
         self.logscale = logscale
         self.backup = backup
         self.ct = ct
-        self.gaussiansmooth = GaussianSmooth(sigma=2)
+        self.gaussiansmooth = GaussianSmooth(sigma=1)
 
     def __call__(self, data):
         d = dict(data)
@@ -298,7 +298,9 @@ class EGDMapd(MapTransform):
                 for idx in range(d[key].shape[0]):
                     image = d[self.image][idx]
                     if self.ct:
-                        image = self.gaussiansmooth(image.copy())
+                        from bm4d import bm4d
+                        image = bm4d(image.copy(), 1)
+                        #image = self.gaussiansmooth(image.copy())
 
                     GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key][idx].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
                     if self.logscale == True:

@@ -25,7 +25,7 @@ class Preprocessing(_MonaiDataset):
         relax_bbox: Union[float, Tuple[float]] = 0.1,
         divisble_using: Union[int, Tuple[int]] = (16, 16, 8),
         clipping: List[float] = [],
-        intensity_mean: float = 0, 
+        intensity_mean: float = 0,
         intensity_std: float = 0,
     ) -> None:
         print("Initializing Preprocessing")
@@ -41,7 +41,9 @@ class Preprocessing(_MonaiDataset):
             self.ct = True
         else:
             self.ct = False
-        
+
+        #self.ct = False
+
         self.data = [
             {"image": img_path, "mask": mask_path, "annotation": annot_path}
             for img_path, mask_path, annot_path in zip(self.images, self.masks, self.annotations)
@@ -117,7 +119,7 @@ class Preprocessing(_MonaiDataset):
 
     def get_files(self):
         self.exp = Path(os.environ["interactiveseg_raw"], self.task)
-    
+
         self.images = sorted([x for x in (self.exp / "imagesTr").glob('**/*') if x.is_file()])
         self.masks = sorted([x for x in (self.exp / "labelsTr").glob('**/*') if x.is_file()])
         self.annotations = sorted([x for x in (self.exp / "interactionTr").glob('**/*') if x.is_file()])
@@ -189,7 +191,7 @@ if __name__=="__main__":
     )
     parser.add_argument(
         "-c",
-        "--C",
+        "--CT",
         action=argparse.BooleanOptionalAction,
         default=False,
         help="is the data CT?"
