@@ -319,6 +319,10 @@ class FingerPrint(object):
             "Fingerprint" : {
                 "In mask": self.in_mask,
                 "Anisotropic": all(self.anisotrophy),
+                "CT": self.ct,
+                "Clipping" : self.clipping,
+                "Intensity_mean" : self.intensity_mean,
+                "Intensity_std" : self.intensity_std,
                 "Resampling": self.resample_strategy,
                 "Target spacing": self.target_spacing,
                 "Median size": self.median_dim,

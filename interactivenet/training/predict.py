@@ -22,7 +22,7 @@ from monai.transforms import (
 from monai.data import Dataset, DataLoader, decollate_batch
 from monai.metrics import compute_meandice, compute_average_surface_distance, compute_hausdorff_distance
 
-from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd
+from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd, NormalizeValuesd
 from interactivenet.utils.visualize import ImagePlot
 from interactivenet.utils.statistics import ResultPlot
 
@@ -60,12 +60,13 @@ class Net(pl.LightningModule):
                     keys=["image", "annotation", "mask"],
                     on="mask",
                     relaxation=0.1,
-                    divisiblepadd=[16, 16, 4],
+                    divisiblepadd=metadata["Plans"]["divisible by"],
                 ),
-                NormalizeIntensityd(
+                NormalizeValuesd(
                     keys=["image"],
-                    nonzero=True,
-                    channel_wise=True,
+                    clipping=metadata["Fingerprint"]["Clipping"],
+                    mean=metadata["Fingerprint"]["Intensity_mean"],
+                    std=metadata["Fingerprint"]["Intensity_std"],
                 ),
                 EGDMapd(
                     keys=["annotation"],
@@ -73,10 +74,7 @@ class Net(pl.LightningModule):
                     lamb=1,
                     iter=4,
                     logscale=True,
-                ),
-                DivisiblePadd(
-                    keys=["image", "annotation", "mask"],
-                    k=[16, 16, 4]
+                    ct=metadata["Fingerprint"]["CT"],
                 ),
                 CastToTyped(keys=["image", "annotation", "mask"], dtype=(np.float32, np.float32, np.uint8)),
                 ConcatItemsd(keys=["image", "annotation"], name="image"),
@@ -206,7 +204,7 @@ if __name__=="__main__":
                 surface_distance = compute_average_surface_distance(output[0][None,:], label[0][None,:], include_background=False)
                 surface[name] = surface_distance.item()
 
-                f = ImagePlot(image[0][:1].numpy(), label[0].numpy(), [output[0][1:].numpy()])
+                f = ImagePlot(image[0][:1].numpy(), label[0].numpy(), [output[0][1:].numpy()], CT=metadata["Fingerprint"]["CT"])
                 mlflow.log_figure(f, f"images/{name}.png")
 
                 if args.weights:

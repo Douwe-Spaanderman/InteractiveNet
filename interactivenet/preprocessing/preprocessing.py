@@ -42,8 +42,6 @@ class Preprocessing(_MonaiDataset):
         else:
             self.ct = False
 
-        #self.ct = False
-
         self.data = [
             {"image": img_path, "mask": mask_path, "annotation": annot_path}
             for img_path, mask_path, annot_path in zip(self.images, self.masks, self.annotations)

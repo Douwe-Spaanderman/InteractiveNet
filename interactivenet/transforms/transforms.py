@@ -10,6 +10,9 @@ import GeodisTK
 from interactivenet.utils.resample import resample_image, resample_label, resample_annotation
 from interactivenet.utils.visualize import ImagePlot
 
+from bm4d import bm4d
+from skimage.restoration import denoise_tv_chambolle
+
 class Visualized(MapTransform):
     """
         This transform class takes NNUNet's preprocessing method for reference.
@@ -297,9 +300,10 @@ class EGDMapd(MapTransform):
             if len(d[key].shape) == 4:
                 for idx in range(d[key].shape[0]):
                     image = d[self.image][idx]
-                    if self.ct:
-                        from bm4d import bm4d
-                        image = bm4d(image.copy(), 1)
+                    #if self.ct:
+                        #print('denoising')
+                        #image = bm4d(image.copy(), 1)
+                        #image = denoise_tv_chambolle(image.copy(), weight=0.5) 
                         #image = self.gaussiansmooth(image.copy())
 
                     GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key][idx].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
@@ -309,8 +313,11 @@ class EGDMapd(MapTransform):
                     d[key][idx, :, :, :] = GD
             else:
                 image = d[self.image]
-                if self.ct:
-                    image = self.gaussiansmooth(image.copy())
+                #if self.ct:
+                    #print('denoising')
+                    #image = bm4d(image.copy(), 1)
+                    #image = denoise_tv_chambolle(image.copy(), weight=0.5) 
+                    #image = self.gaussiansmooth(image.copy())
 
                 GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
                 if self.logscale == True:
