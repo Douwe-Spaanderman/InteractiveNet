@@ -318,7 +318,7 @@ class FingerPrint(object):
         d = {
             "Fingerprint" : {
                 "In mask": self.in_mask,
-                "Anisotropic": all(self.anisotrophy),
+                "Anisotropic": self.anisotrophy.count(True) >= len(self.anisotrophy) / 2,
                 "CT": self.ct,
                 "Clipping" : self.clipping,
                 "Intensity_mean" : self.intensity_mean,

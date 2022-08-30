@@ -1,7 +1,11 @@
 import numpy as np
+import torch
+
 import matplotlib.pyplot as plt
 from scipy import ndimage
 from skimage import morphology
+
+from interactivenet.utils.utils import to_array
 
 def cart2pol(x, y):
     rho = np.sqrt(x**2 + y**2)
@@ -16,7 +20,7 @@ def pol2cart(rho, phi):
 
 
 def ImagePlot(img, GT, annotation=None, additional_scans=None, CT=False, radius=1, zoom=False, show=None, save=None, save_type='png', colors=['dodgerblue', 'magenta', 'cyan', 'navy', 'purple'], cmap=plt.cm.gray, ax=None):
-    if not isinstance(object, list):
+    if not isinstance(GT, list):
         segs = [GT]
     else:
         segs = GT
@@ -27,10 +31,13 @@ def ImagePlot(img, GT, annotation=None, additional_scans=None, CT=False, radius=
     if annotation:
         segs.extend(annotation)
 
+    img = to_array(img)
+    segs = [to_array(seg) for seg in segs]
+    
     if len(img.shape) == 4:
         img = img[0]
-        segs = [x[0] for x in segs]
-        
+        segs = [seg[0] for seg in segs]
+
     if annotation:
         _, _, inds_z = np.where(segs[-1] > 0.5)
         inds_z = sorted(inds_z)

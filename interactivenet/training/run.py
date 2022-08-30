@@ -45,19 +45,6 @@ class Net(pl.LightningModule):
             act_name = 'leakyrelu',
             deep_supervision = False,
         )
-        """
-        self._model = UNet(
-            spatial_dims=3,
-            in_channels=2,
-            out_channels=2,
-            kernel_size=metadata["Plans"]["kernels"],
-            strides=metadata["Plans"]["strides"],
-            upsample_kernel_size=metadata["Plans"]["strides"][1:],
-            filters=[4, 8, 16, 32, 64, 128],
-            activation = 'LRELU',
-            deep_supervision = False,
-        )
-        """
         self.data = data
         self.metadata = metadata
         self.split = split
@@ -245,4 +232,3 @@ if __name__=="__main__":
         mlflow.set_tag('Mode', 'training')
         mlflow.log_param("fold", args.fold)
         trainer.fit(network)
-        mlflow.pytorch.log_state_dict(network._model.state_dict(), "final_model_state_dict")

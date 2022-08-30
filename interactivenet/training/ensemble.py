@@ -19,6 +19,9 @@ from monai.metrics import compute_meandice, compute_average_surface_distance, co
 from interactivenet.utils.visualize import ImagePlot
 from interactivenet.utils.statistics import ResultPlot
 
+import nibabel as nib
+from interactivenet.utils.resample import resample_label
+
 if __name__=="__main__":
     parser = argparse.ArgumentParser(
             description="Ensembling of predicted weights"
@@ -44,9 +47,17 @@ if __name__=="__main__":
         default="mean",
         help="Do you want to use mean or vote ensembling (default = mean)"
     )
+    parser.add_argument(
+        "-o",
+        "--original_size",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Do you want to change labels to the original size?"
+    )
 
     args = parser.parse_args()
     raw = Path(os.environ["interactiveseg_raw"], args.task)
+    exp = os.environ["interactiveseg_processed"]
 
     discrete = AsDiscrete(argmax=True, to_onehot=2)
     if args.method == "mean":
@@ -67,6 +78,13 @@ if __name__=="__main__":
     else:
         types = False
 
+    metadata = Path(exp, args.task, "plans.json")
+    if metadata.is_file():
+        with open(metadata) as f:
+            metadata = json.load(f)
+    else:
+        raise KeyError("metadata not found")
+
     experiment_id = mlflow.get_experiment_by_name(args.task)
     if experiment_id == None:
         raise ValueError("Experiments not found, please first train models")
@@ -76,15 +94,16 @@ if __name__=="__main__":
 
     n = 0
     names = []
+    metas = []
     outputs = []
     for idx, run in runs.iterrows():
         if run["tags.Mode"] == "testing":
-            exp = Path(run["artifact_uri"].split("//")[-1])
-            weights = exp / "weights"
+            experiment = Path(run["artifact_uri"].split("//")[-1])
+            weights = experiment / "weights"
             if weights.is_dir():
-                output = [x for x in weights.glob("*.npz")]
-                names.append([x.stem for x in output])
-                outputs.append(output)
+                outputs.append(sorted([x for x in weights.glob("*.npz")]))
+                metas(sorted([x for x in weights.glob("*.pkl")]))
+                names.append(sorted([x.stem for x in output]))
             else:
                 raise ValueError("No weights are available to ensemble, please use predict with -w or --weights to save outputs as weights")
 
@@ -100,19 +119,13 @@ if __name__=="__main__":
             mlflow.set_tag('Mode', 'ensemble')
             mlflow.log_param("method", args.method)
 
-            outputs = [sorted(x) for x in outputs]
-
             dices = {}
             hausdorff = {}
             surface = {}
             for output in zip(*outputs):
                 name = output[0].stem
-                main = np.load(output[0])
-                image = torch.from_numpy(main["image"])
-                label = torch.from_numpy(main["label"])
-
                 pred = torch.from_numpy(np.stack([np.load(x)["weights"] for x in output], axis=0))
-
+                
                 if args.method == "vote":
                     pred = torch.stack([discrete(x) for x in pred])
                 
@@ -120,8 +133,42 @@ if __name__=="__main__":
                 if args.method == "mean":
                     pred = discrete(pred)
 
+                main = np.load(output[0])
+                image = torch.from_numpy(main["image"])
+                label = torch.from_numpy(main["label"])
                 dice = compute_meandice(pred[None,:], label[None,:], include_background=False)
                 dices[name] = dice.item()
+
+                if args.original_size:
+                    print('normal')
+                    image = nib.load(str(raw / f"imagesTs/{name}_0000.nii.gz"))
+                    label = nib.load(str(raw / f"labelsTs/{name}.nii.gz"))
+
+                    image = torch.from_numpy(image.get_fdata())
+                    label = torch.from_numpy(label.get_fdata())
+                    new_pred = []
+
+                    spacing_ratio = np.array(image_spacings) / np.array(self.target_spacing)
+                    resample_shape = self.calculate_new_shape(spacing_ratio, original_shape)
+                    for idx in range(pred.shape[0]):
+                        new_pred.append(torch.from_numpy(resample_label(pred[idx].numpy()[None,:], label.shape, metadata["Fingerprint"]["Anisotropic"])))
+
+                    pred = torch.cat(new_pred, 0)
+                    test = AsDiscrete(to_onehot=2)
+                    label = test(label[None,:])
+                    image = image[None,:]
+
+                    dice = compute_meandice(pred[None,:], label[None,:], include_background=False)
+                    dices[name] = dice.item()
+                    print(dices[name])
+                else:
+                    main = np.load(output[0])
+                    image = torch.from_numpy(main["image"])
+                    label = torch.from_numpy(main["label"])
+                    image = image[:1]
+
+                #dice = compute_meandice(pred[None,:], label[None,:], include_background=False)
+                #dices[name] = dice.item()
 
                 hausdorff_distance = compute_hausdorff_distance(pred[None,:], label[None,:], include_background=False)
                 hausdorff[name] = hausdorff_distance.item()
@@ -129,7 +176,7 @@ if __name__=="__main__":
                 surface_distance = compute_average_surface_distance(pred[None,:], label[None,:], include_background=False)
                 surface[name] = surface_distance.item()
 
-                f = ImagePlot(image[:1].numpy(), label[:1].numpy(), additional_scans=[pred[1:].numpy()])
+                f = ImagePlot(image.numpy(), label[:1].numpy(), additional_scans=[pred[1:].numpy()])
                 mlflow.log_figure(f, f"images/{name}.png")
 
             mlflow.log_metric("Mean dice", np.mean(list(dices.values())))

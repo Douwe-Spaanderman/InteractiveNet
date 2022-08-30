@@ -1,9 +1,11 @@
+from typing import Union, Dict
+
 import warnings
 import pickle
 import math
 from pathlib import Path
 
-from monai.transforms.transform import MapTransform
+from monai.transforms.transform import MapTransform, Transform
 from monai.transforms import NormalizeIntensity, GaussianSmooth
 import numpy as np
 import GeodisTK
@@ -12,6 +14,62 @@ from interactivenet.utils.visualize import ImagePlot
 
 from bm4d import bm4d
 from skimage.restoration import denoise_tv_chambolle
+
+
+class OriginalSize(Transform):
+    """
+    Return the label to the original image shape
+    """
+
+    def __init__(
+        self,
+        anisotrophic:bool
+    ) -> None:
+        self.anisotrophic = anisotrophic
+
+    def __call__(self, img: np.ndarray, meta: Dict) -> np.ndarray:
+        """
+        Apply the transform to `img` using `meta`.
+        """
+
+        if (np.array(img[0,:].shape) != np.array(meta["final_bbox_shape"])).all():
+            raise ValueError("image and metadata don't match so can't restore to original size")
+
+        new_size = tuple(meta["new_dim"])
+        box_start = np.array(meta["final_bbox"])
+        padding = [box_start[0], [
+            new_size[0] - box_start[1][0],
+            new_size[1] - box_start[1][1],
+            new_size[2] - box_start[1][2]
+        ]]
+
+        old_size = img.shape[1:]
+        zero_padding = np.array(meta["zero_padding"])
+        zero_padding = [
+            [zero_padding[0][0], zero_padding[0][1], zero_padding[0][2]],
+            [old_size[0] - zero_padding[1][0], old_size[1] - zero_padding[1][1], old_size[2] - zero_padding[1][2]],
+        ]
+
+        new_img = []
+        method = ["maximum"] + ["minimum"]*(img.shape[0]-1)
+        for i, channel in enumerate(img):
+            box = channel[zero_padding[0][0]:zero_padding[1][0],zero_padding[0][1]:zero_padding[1][1],zero_padding[0][2]:zero_padding[1][2]]
+            new_img.append(np.pad(
+                box, (
+                    (padding[0][0], padding[1][0]), 
+                    (padding[0][1], padding[1][1]), 
+                    (padding[0][2], padding[1][2])), 
+                method[i])
+            )
+
+        new_img = np.stack(new_img, axis=0)
+
+        if new_img[0].shape != new_size:
+            raise ValueError("New img and new size do know have the same size??")
+
+        new_img = resample_image(new_img, meta["org_dim"], anisotrophy_flag=meta["anisotrophy_flag"])
+
+        return new_img
 
 class Visualized(MapTransform):
     """
@@ -163,12 +221,12 @@ class Resamplingd(MapTransform):
         return not any(sanity)
 
     def __call__(self, data):
-        # load data
-
-        # This is not really nice and could be better with sanitizing input
         if len(self.keys) == 3:
             image, annotation, label = self.keys
             nimg, npnt, nseg = image, annotation, label
+        elif len(self.keys) == 2:
+            image, annotation = self.keys
+            nimg, npnt = image, annotation
         else:
             image = self.keys
             name = image
@@ -355,6 +413,7 @@ class BoudingBoxd(MapTransform):
 
         self.relaxation = relaxation
         self.divisiblepadd = divisiblepadd
+        self.zeropadd = np.zeros(3)
 
     def calculate_bbox(self, data):
         inds_x, inds_y, inds_z = np.where(data > 0.5)
@@ -405,6 +464,7 @@ class BoudingBoxd(MapTransform):
         largest_dimension = [int(x) if  x <= data.shape[i] else data.shape[i] for i, x in enumerate(bbox[1])]
         bbox = np.array([bbox[0].tolist(), largest_dimension])
 
+        zeropadding = self.zeropadd.copy()
         if self.divisiblepadd:
             for axis in range(len(self.divisiblepadd)):
                 expand = True
@@ -412,6 +472,7 @@ class BoudingBoxd(MapTransform):
                     bbox_shape = np.subtract(bbox[1][axis],bbox[0][axis])
                     residue = bbox_shape % self.divisiblepadd[axis]
                     if residue != 0:
+                        residue = self.divisiblepadd[axis] - residue
                         if residue < 2:
                             neg = bbox[0][axis] - 1
                             if neg >= 0:
@@ -421,8 +482,9 @@ class BoudingBoxd(MapTransform):
                                 if pos <= data.shape[axis]:
                                     bbox[1][axis] = pos
                                 else:
+                                    zeropadding[axis] = zeropadding[axis] + residue
+                                    warnings.warn(f"bbox doesn't fit in the image for axis {axis}, adding zero padding {residue}")
                                     expand = False
-                                    warnings.warn(f"bbox doesn't fit in the image for axis {axis}, adding zero padding")
                         else:
                             neg = bbox[0][axis] - 1
                             if neg >= 0:
@@ -433,19 +495,35 @@ class BoudingBoxd(MapTransform):
                                 bbox[1][axis] = pos
 
                             if neg <= 0 and pos >= data.shape[axis]:
+                                zeropadding[axis] = zeropadding[axis] + residue
+                                warnings.warn(f"bbox doesn't fit in the image for axis {axis}, adding zero padding {residue}")
                                 expand = False
-                                warnings.warn(f"bbox doesn't fit in the image for axis {axis}, adding zero padding")
                     else:
                         expand = False
 
-        return bbox
+        padding = np.zeros((2,3), dtype=int)
+        if any(zeropadding > 0):
+            for idx, value in enumerate(zeropadding):
+                x = int(value / 2)
+                y = int(value - x)
+                padding[0][idx] = x
+                padding[1][idx] = y
 
-    def extract_bbox_region(self, data, bbox):
+        return bbox, padding
+
+    def extract_bbox_region(self, data, bbox, padding):
         new_region = data[
                 bbox[0][0]:bbox[1][0],
                 bbox[0][1]:bbox[1][1],
                 bbox[0][2]:bbox[1][2]
                 ]
+
+        new_region = np.pad(
+            new_region, (
+                (padding[0][0], padding[1][0]), 
+                (padding[0][1], padding[1][1]), 
+                (padding[0][2], padding[1][2])), 
+            'constant')
 
         return new_region
 
@@ -466,23 +544,28 @@ class BoudingBoxd(MapTransform):
         relaxation = self.calculate_relaxtion(bbox_shape)
 
         print(f"Original bouding box at location: {bbox[0]} and {bbox[1]} \t shape of bbox: {bbox_shape}")
-        final_bbox = self.relax_bbox(d[self.on][0], bbox, relaxation)
+        final_bbox, zeropadding = self.relax_bbox(d[self.on][0], bbox, relaxation)
         final_bbox_shape = np.subtract(final_bbox[1],final_bbox[0])
         print(f"Bouding box at location: {final_bbox[0]} and {final_bbox[1]} \t bbox is relaxt with: {relaxation} \t and made divisible with: {self.divisiblepadd} \t shape after cropping: {final_bbox_shape}")
         for key in self.keys:
             if len(d[key].shape) == 4:
                 new_dkey = []
                 for idx in range(d[key].shape[0]):
-                    new_dkey.append(self.extract_bbox_region(d[key][idx], final_bbox))
+                    new_dkey.append(self.extract_bbox_region(d[key][idx], final_bbox, zeropadding))
                 d[key] = np.stack(new_dkey, axis=0)
+                final_size = d[key].shape[1:]
             else:
-                d[key] = self.extract_bbox_region(d[key], final_bbox)
+                d[key] = self.extract_bbox_region(d[key], final_bbox, zeropadding)
+                final_size = d[key].shape
 
             d[f"{key}_meta_dict"]["bbox"] = bbox
             d[f"{key}_meta_dict"]["bbox_shape"] = bbox_shape
             d[f"{key}_meta_dict"]["bbox_relaxation"] = self.relaxation
             d[f"{key}_meta_dict"]["final_bbox"] = final_bbox
             d[f"{key}_meta_dict"]["final_bbox_shape"] = final_bbox_shape
+            d[f"{key}_meta_dict"]["zero_padding"] = zeropadding
+            d[f"{key}_meta_dict"]["final_size"] = final_size
+            print(d[f"{key}_meta_dict"]["final_size"])
 
         return d
 
