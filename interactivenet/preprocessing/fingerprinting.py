@@ -105,6 +105,7 @@ class FingerPrint(object):
 
         # Experiment planning 
         self.kernels, self.strides = self.get_kernels_strides(self.median_resampled_shape, self.target_spacing)
+        self.deep_supervision, self.supervision_weights = self.get_supervision(self.strides)
         self.divisible_by = self.get_divisible(self.strides)
         print(f"- Network selection: {self.kernels} (kernels)")
         print(f"- Network selection: {self.strides} (strides)")
@@ -206,6 +207,7 @@ class FingerPrint(object):
             self.intensity_std.append(np.std(points))
 
     def get_kernels_strides(self, sizes, spacings):
+        input_size = sizes
         strides, kernels = [], []
         while True:
             spacing_ratio = [sp / min(spacings) for sp in spacings]
@@ -216,13 +218,25 @@ class FingerPrint(object):
             kernel = [3 if ratio <= 2 else 1 for ratio in spacing_ratio]
             if all(s == 1 for s in stride):
                 break
+            for idx, (i, j) in enumerate(zip(sizes, stride)):
+                if i % j != 0:
+                    raise ValueError(
+                        f"Size is not supported, please try to modify the size {input_size[idx]} in the spatial dimension {idx}."
+                    )
             sizes = [i / j for i, j in zip(sizes, stride)]
             spacings = [i * j for i, j in zip(spacings, stride)]
             kernels.append(kernel)
             strides.append(stride)
+
         strides.insert(0, len(spacings) * [1])
         kernels.append(len(spacings) * [3])
         return kernels, strides
+
+    def get_supervision(self, strides):
+        deep_supervision = len(strides) - 3
+        weights = np.array([0.5 ** i for i in range(deep_supervision+1)])
+        weights = weights / np.sum(weights)
+        return deep_supervision, weights
     
     def get_divisible(self, strides):
         d = [1] * len(strides[0])
@@ -333,6 +347,8 @@ class FingerPrint(object):
             "Plans": {
                 "kernels": self.kernels,
                 "strides" : self.strides,
+                "deep supervision": self.deep_supervision,
+                "deep supervision weights": self.supervision_weights,
                 "padding": self.relax_bbox,
                 "divisible by": self.divisible_by,
                 "seed": self.seed,

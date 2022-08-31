@@ -565,7 +565,6 @@ class BoudingBoxd(MapTransform):
             d[f"{key}_meta_dict"]["final_bbox_shape"] = final_bbox_shape
             d[f"{key}_meta_dict"]["zero_padding"] = zeropadding
             d[f"{key}_meta_dict"]["final_size"] = final_size
-            print(d[f"{key}_meta_dict"]["final_size"])
 
         return d
 

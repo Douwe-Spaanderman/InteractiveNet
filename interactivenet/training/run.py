@@ -2,6 +2,7 @@ from pathlib import Path
 import numpy as np
 import os
 import json
+import argparse
 
 from monai.utils import set_determinism
 from monai.transforms import (
@@ -15,11 +16,13 @@ from monai.transforms import (
     RandGaussianNoised,
     RandGaussianSmoothd,
     CastToTyped,
+    RandAdjustContrastd,
+    RandZoomd,
+    RandRotated,
 )
 from monai.networks.nets import DynUNet
 from monai.metrics import DiceMetric
 from monai.losses import DiceCELoss
-from monai.inferers import sliding_window_inference
 from monai.data import Dataset, DataLoader, decollate_batch
 
 from interactivenet.transforms.transforms import LoadPreprocessed
@@ -27,7 +30,7 @@ from interactivenet.networks.unet import UNet
 
 import torch
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import LearningRateMonitor
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 
 import mlflow.pytorch
 
@@ -42,8 +45,10 @@ class Net(pl.LightningModule):
             strides=metadata["Plans"]["strides"],
             upsample_kernel_size=metadata["Plans"]["strides"][1:],
             filters=[4, 8, 16, 32, 64, 128],
+            norm_name= 'instance',
             act_name = 'leakyrelu',
-            deep_supervision = False,
+            deep_supervision = True,
+            deep_supr_num = metadata["Plans"]["deep supervision"]
         )
         self.data = data
         self.metadata = metadata
@@ -54,8 +59,9 @@ class Net(pl.LightningModule):
         self.post_label = AsDiscrete(to_onehot=2)
         self.best_val_dice = 0
         self.best_val_epoch = 0
-        self.max_epochs = 3000
+        self.max_epochs = 500
         self.batch_size = 1
+        self.supervision_weights = metadata["Plans"]["deep supervision weights"]
 
     def forward(self, x):
         return self._model(x)
@@ -66,15 +72,32 @@ class Net(pl.LightningModule):
         train_transforms = Compose(
             [
                 LoadPreprocessed(keys=["npz", "metadata"], new_keys=["image", "annotation", "mask"]),
+                RandRotated(
+                    keys=["image", "annotation", "mask"],
+                    range_x=180,
+                    range_y=180,
+                    mode=("bilinear", "bilinear", "nearest"),
+                    align_corners=(True, True, None),
+                    prob=0.2,
+                ),
+                RandZoomd(
+                    keys=["image", "annotation", "mask"],
+                    min_zoom=0.7,
+                    max_zoom=1.4,
+                    mode=("trilinear", "trilinear", "nearest"),
+                    align_corners=(True, True, None),
+                    prob=0.2,
+                ),
                 RandGaussianNoised(keys=["image"], std=0.01, prob=0.15),
                 RandGaussianSmoothd(
                     keys=["image"],
-                    sigma_x=(0.5, 1.15),
-                    sigma_y=(0.5, 1.15),
-                    sigma_z=(0.5, 1.15),
-                    prob=0.15,
+                    sigma_x=(0.5, 1.5),
+                    sigma_y=(0.5, 1.5),
+                    sigma_z=(0.5, 1.5),
+                    prob=0.2,
                 ),
                 RandScaleIntensityd(keys=["image"], factors=0.3, prob=0.15),
+                RandAdjustContrastd(keys=["image"], gamma=(0.65, 1.5), prob=0.15),
                 RandFlipd(keys=["image", "annotation", "mask"], spatial_axis=[0], prob=0.5),
                 RandFlipd(keys=["image", "annotation", "mask"], spatial_axis=[1], prob=0.5),
                 RandFlipd(keys=["image", "annotation", "mask"], spatial_axis=[2], prob=0.5),
@@ -83,6 +106,7 @@ class Net(pl.LightningModule):
                 ToTensord(keys=["image", "mask"]),
                 ]
         )
+        
         val_transforms = Compose(
             [
                 LoadPreprocessed(keys=["npz", "metadata"], new_keys=["image", "annotation", "mask"]),
@@ -123,10 +147,20 @@ class Net(pl.LightningModule):
         }
         return [self.optimizer], [self.lr_scheduler]
 
+    def _compute_loss(self, outputs, labels):
+        if len(outputs.size()) - len(labels.size()) == 1:
+            outputs = torch.unbind(outputs, dim=1)
+            loss = sum([self.supervision_weights[i] * self.loss_function(output, labels) for i, output in enumerate(outputs)])
+        else:
+            loss = self.loss_function(outputs, labels)
+
+        return loss
+
     def training_step(self, batch, batch_idx):
         images, labels = batch["image"], batch["mask"]
-        output = self.forward(images)
-        loss = self.loss_function(output, labels)
+        outputs = self.forward(images)
+        loss = self._compute_loss(outputs, labels)
+
         self.log("loss", loss, on_epoch=True, batch_size=self.batch_size)
         return {"loss": loss}
 
@@ -137,7 +171,8 @@ class Net(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         images, labels = batch["image"], batch["mask"]
         outputs = self.forward(images)
-        loss = self.loss_function(outputs, labels)
+        loss = self._compute_loss(outputs, labels)
+
         outputs = [self.post_pred(i) for i in decollate_batch(outputs)]
         labels = [self.post_label(i) for i in decollate_batch(labels)]
         self.dice_metric(y_pred=outputs, y=labels)
@@ -169,11 +204,6 @@ class Net(pl.LightningModule):
         return mean_val_dice, mean_val_loss
 
 if __name__=="__main__":
-    lr_logger = LearningRateMonitor(logging_interval="epoch")
-
-    import argparse
-    import os
-
     parser = argparse.ArgumentParser(
              description="Preprocessing of "
          )
@@ -209,15 +239,11 @@ if __name__=="__main__":
             for npz_path, metafile_path in zip(sorted(arrays), sorted(metafile))
         ]
 
-    network = Net(data, metadata, split=args.fold)
-    trainer = pl.Trainer(
-        gpus=-1,
-        max_epochs=500,
-        num_sanity_val_steps=1,
-        log_every_n_steps=50,
-        check_val_every_n_epoch=1,
-        callbacks=[lr_logger],
-        accumulate_grad_batches=4,
+    lr_logger = LearningRateMonitor(logging_interval="epoch")
+    checkpoint_callback = ModelCheckpoint(
+        monitor="val_loss",
+        filename='{epoch:02d}-{val_loss:.2f}',
+        mode='min'
     )
 
     experiment_id = mlflow.get_experiment_by_name(args.task)
@@ -228,7 +254,21 @@ if __name__=="__main__":
 
     mlflow.pytorch.autolog()
 
-    with mlflow.start_run(experiment_id=experiment_id, run_name=args.fold) as run:
+    with mlflow.start_run(experiment_id=experiment_id, run_name=f"{args.fold}") as run:
         mlflow.set_tag('Mode', 'training')
         mlflow.log_param("fold", args.fold)
+        artifact_path = Path(mlflow.get_artifact_uri().split('file://')[-1])
+
+        network = Net(data, metadata, split=args.fold)
+        trainer = pl.Trainer(
+            gpus=-1,
+            max_epochs=500,
+            num_sanity_val_steps=1,
+            log_every_n_steps=50,
+            check_val_every_n_epoch=1,
+            callbacks=[lr_logger, checkpoint_callback],
+            accumulate_grad_batches=4,
+            default_root_dir=artifact_path
+        )
+        
         trainer.fit(network)
