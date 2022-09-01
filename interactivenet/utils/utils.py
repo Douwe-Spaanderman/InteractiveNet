@@ -25,6 +25,21 @@ def read_nifti(data:Dict, test:bool=False):
 
     return loaded_data
 
+def read_processed(datapath:Union[str, PosixPath]):
+    if isinstance(datapath, str):
+        datapath = Path(datapath)
+
+    arrays = sorted([x for x in (datapath / "network_input").glob('**/*.npz') if x.is_file()])
+    metafile = sorted([x for x in (datapath / "network_input").glob('**/*.pkl') if x.is_file()])
+
+    if len(arrays) != len(metafile):
+        raise ValueError("not the same number files for arrays and metafile")
+
+    return [
+            {"npz": npz_path, "metadata": metafile_path}
+            for npz_path, metafile_path in zip(arrays, metafile)
+        ]
+
 def read_data(datapath:Union[str, PosixPath], test:bool=False):
     if isinstance(datapath, str):
         datapath = Path(datapath)

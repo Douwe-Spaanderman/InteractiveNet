@@ -176,7 +176,7 @@ class Net(pl.LightningModule):
         outputs = [self.post_pred(i) for i in decollate_batch(outputs)]
         labels = [self.post_label(i) for i in decollate_batch(labels)]
         self.dice_metric(y_pred=outputs, y=labels)
-        self.log("val_loss", loss, on_epoch=True, batch_size=self.batch_size)
+        self.log("val_loss", loss, on_epoch=True, batch_size=1)
         return {"val_loss": loss, "val_number": len(outputs)}
 
     def validation_epoch_end(self, outputs):
@@ -223,21 +223,11 @@ if __name__=="__main__":
          help="which fold do you want to train?"
     )
     args = parser.parse_args()
-    exp = os.environ["interactiveseg_processed"]
+    exp = Path(os.environ["interactiveseg_processed"], args.task)
 
-    arrays = [x for x in Path(exp, args.task, "network_input").glob('**/*.npz') if x.is_file()]
-    metafile = [x for x in Path(exp, args.task, "network_input").glob('**/*.pkl') if x.is_file()]
-    metadata = Path(exp, args.task, "plans.json")
-    if metadata.is_file():
-        with open(metadata) as f:
-            metadata = json.load(f)
-    else:
-        raise KeyError("metadata not found")
-
-    data = [
-            {"npz": npz_path, "metadata": metafile_path}
-            for npz_path, metafile_path in zip(sorted(arrays), sorted(metafile))
-        ]
+    from interactivenet.utils.utils import read_processed, read_metadata
+    data = read_processed(exp)
+    metadata = read_metadata(exp / "plans.json")
 
     lr_logger = LearningRateMonitor(logging_interval="epoch")
     checkpoint_callback = ModelCheckpoint(
@@ -246,15 +236,12 @@ if __name__=="__main__":
         mode='min'
     )
 
-    experiment_id = mlflow.get_experiment_by_name(args.task)
-    if experiment_id == None:
-        print(f"experiment_id not found will create {args.task}")
-        experiment_id = mlflow.create_experiment(args.task)
-    else: experiment_id = experiment_id.experiment_id
+    from interactivenet.utils.mlflow import mlflow_get_id
+    experiment_id = mlflow_get_id(args.task)
 
     mlflow.pytorch.autolog()
 
-    with mlflow.start_run(experiment_id=experiment_id, run_name=f"{args.fold}") as run:
+    with mlflow.start_run(experiment_id=experiment_id, run_name=args.fold) as run:
         mlflow.set_tag('Mode', 'training')
         mlflow.log_param("fold", args.fold)
         artifact_path = Path(mlflow.get_artifact_uri().split('file://')[-1])

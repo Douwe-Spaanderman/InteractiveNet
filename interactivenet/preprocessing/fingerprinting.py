@@ -218,11 +218,7 @@ class FingerPrint(object):
             kernel = [3 if ratio <= 2 else 1 for ratio in spacing_ratio]
             if all(s == 1 for s in stride):
                 break
-            for idx, (i, j) in enumerate(zip(sizes, stride)):
-                if i % j != 0:
-                    raise ValueError(
-                        f"Size is not supported, please try to modify the size {input_size[idx]} in the spatial dimension {idx}."
-                    )
+                
             sizes = [i / j for i, j in zip(sizes, stride)]
             spacings = [i * j for i, j in zip(spacings, stride)]
             kernels.append(kernel)
