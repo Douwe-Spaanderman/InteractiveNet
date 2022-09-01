@@ -66,7 +66,7 @@ def read_data(datapath:Union[str, PosixPath], test:bool=False):
             for img_path, annot_path in zip(images, annotations)
         ]
 
-def read_metadata(metapath:Union[str, PosixPath]):
+def read_metadata(metapath:Union[str, PosixPath], error_message=None):
     if isinstance(metapath, str):
         metapath = Path(metapath)
 
@@ -74,7 +74,10 @@ def read_metadata(metapath:Union[str, PosixPath]):
         with open(metapath) as f:
             return json.load(f)
     else:
-        raise KeyError(f"metadata does not exist at path: {metapath}")
+        if error_message:
+            raise KeyError(error_message)
+        else:
+            raise KeyError(f"metadata does not exist at path: {metapath}")
 
 def read_types(typespath:Union[str, PosixPath]):
     if isinstance(typespath, str):

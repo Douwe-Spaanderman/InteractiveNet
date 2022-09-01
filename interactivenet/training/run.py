@@ -35,7 +35,7 @@ from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 import mlflow.pytorch
 
 class Net(pl.LightningModule):
-    def __init__(self, data, metadata, split=0):
+    def __init__(self, data, metadata, split=0, filters=[4, 8, 16, 32, 64, 128]):
         super().__init__()
         self._model = DynUNet(
             spatial_dims=3,
@@ -44,7 +44,7 @@ class Net(pl.LightningModule):
             kernel_size=metadata["Plans"]["kernels"],
             strides=metadata["Plans"]["strides"],
             upsample_kernel_size=metadata["Plans"]["strides"][1:],
-            filters=[4, 8, 16, 32, 64, 128],
+            filters=filters,
             norm_name= 'instance',
             act_name = 'leakyrelu',
             deep_supervision = True,
@@ -158,6 +158,7 @@ class Net(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         images, labels = batch["image"], batch["mask"]
+        print(images.shape)
         outputs = self.forward(images)
         loss = self._compute_loss(outputs, labels)
 
@@ -170,6 +171,7 @@ class Net(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         images, labels = batch["image"], batch["mask"]
+        print(images.shape)
         outputs = self.forward(images)
         loss = self._compute_loss(outputs, labels)
 
@@ -250,6 +252,7 @@ if __name__=="__main__":
         trainer = pl.Trainer(
             gpus=-1,
             max_epochs=500,
+            precision=16,
             num_sanity_val_steps=1,
             log_every_n_steps=50,
             check_val_every_n_epoch=1,

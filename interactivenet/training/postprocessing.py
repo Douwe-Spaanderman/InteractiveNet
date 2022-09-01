@@ -22,6 +22,7 @@ from monai.data import Dataset, DataLoader, decollate_batch
 
 from interactivenet.transforms.transforms import LoadPreprocessed
 from interactivenet.networks.unet import UNet
+from interactivenet.training.run import Net as TrainNet
 
 import torch
 import pytorch_lightning as pl
@@ -39,7 +40,6 @@ class Net(pl.LightningModule):
         self.dice_metric = DiceMetric(include_background=True, reduction="mean_batch", get_not_nans=False)
         self.post_pred = AsDiscrete(argmax=True, to_onehot=2)
         self.post_label = AsDiscrete(to_onehot=2)
-        self.supervision_weights = metadata["Plans"]["deep supervision weights"]
 
         self.fillholes = FillHoles(applied_labels=None, connectivity=2)
         self.largestcomponent = KeepLargestConnectedComponent(applied_labels=None, connectivity=2)
@@ -50,25 +50,12 @@ class Net(pl.LightningModule):
                 self.largestcomponent
             ]
         )
-        self.configurations = ["standard", "fillholes", "largestcomponent", "both"]
+        self.configurations = ["standard", "fillholes", "largestcomponent", "fillholes_and_largestcomponent"]
 
         self.checkpoint = checkpoint
         if self.checkpoint:
-            self.checkpoint = DynUNet(
-                spatial_dims=3,
-                in_channels=2,
-                out_channels=2,
-                kernel_size=metadata["Plans"]["kernels"],
-                strides=metadata["Plans"]["strides"],
-                upsample_kernel_size=metadata["Plans"]["strides"][1:],
-                filters=[4, 8, 16, 32, 64, 128],
-                norm_name= 'instance',
-                act_name = 'leakyrelu',
-                deep_supervision = True,
-                deep_supr_num = metadata["Plans"]["deep supervision"]
-            )
-            self.checkpoint = self.checkpoint.load_from_checkpoint(checkpoint)
-            self.configurations = ["standard", "checkpoint", "fillholes", "fillholes_ckpt", "largestcomponent", "largestcomponent_ckpt", "both", "both_ckpt"]
+            self.checkpoint = TrainNet.load_from_checkpoint(checkpoint_path=checkpoint, data=data, metadata=metadata)._model
+            self.configurations = ["standard", "checkpoint", "fillholes", "fillholes_ckpt", "largestcomponent", "largestcomponent_ckpt", "fillholes_and_largestcomponent", "fillholes_and_largestcomponent_ckpt"]
 
     def forward(self, x, model):
         return model(x)
@@ -113,9 +100,6 @@ class Net(pl.LightningModule):
         for postprocessing in [self.fillholes, self.largestcomponent, self.postprocessing]:
             outputs.extend([postprocessing(x) for x in tmp])
 
-        print(outputs[0].shape)
-        print(torch.equal(outputs[0], outputs[-1]))
-
         outputs = torch.stack(outputs, dim=0).unsqueeze(0)        
         labels = torch.cat([self.post_label(i)[1:] for i in decollate_batch(labels)]*outputs.shape[1], dim=0).unsqueeze(0)
         self.dice_metric(y_pred=outputs, y=labels)
@@ -123,8 +107,6 @@ class Net(pl.LightningModule):
 
     def validation_epoch_end(self, outputs):
         mean_val_dice = self.dice_metric.aggregate()
-        print(mean_val_dice)
-        print(mean_val_dice.item())
         [self.log(self.configurations[i], x) for i, x in enumerate(mean_val_dice)]
         return mean_val_dice
 
@@ -151,25 +133,41 @@ if __name__=="__main__":
     from interactivenet.utils.mlflow import mlflow_get_runs
     runs, experiment_id = mlflow_get_runs(args.task)
 
-    runs = [runs.loc[1]]
-
     mlflow.pytorch.autolog()
-    for idx, run in enumerate(runs):#runs.iterrows():
+    for idx, run in runs.iterrows():
         if run["tags.Mode"] != "training": #or run["tags.Postprocessing"] == "Done":
             continue
         
         run_id = run["run_id"]
         fold = int(run["params.fold"])
         model = "runs:/" + run_id + "/model"
-
-        with mlflow.start_run(experiment_id=experiment_id, run_name='test') as run: #run_id=run_id
-            #mlflow.set_tag('Postprocessing', 'Done')
+        ckpt = [x for x in Path(run["artifact_uri"].split('file://')[-1], "lightning_logs").glob("**/*.ckpt")][-1]
+        with mlflow.start_run(run_id=run_id) as run:
+            mlflow.set_tag('Postprocessing', 'Done')
             artifact_path = Path(mlflow.get_artifact_uri().split('file://')[-1])
 
-            network = Net(data, metadata, model, split=fold)
+            network = Net(data, metadata, model, split=fold, checkpoint=ckpt)
             trainer = pl.Trainer(
                 gpus=0,
                 default_root_dir=artifact_path
             )
             
-            trainer.validate(network)
+            output = trainer.validate(network)[0]
+            values = list(output.values())
+            best_score = list(output.keys())[values.index(max(values))]
+            postprocessing = {}
+            if best_score == "checkpoint" or "ckpt" in best_score:
+                postprocessing["using_checkpoint"] = True
+                mlflow.pytorch.log_model(network.checkpoint, "model_checkpoint")
+                if best_score != "checkpoint":
+                    postprocessing["postprocessing"] = "_".join(best_score.split("_")[:-1])
+                else:
+                    postprocessing["postprocessing"] = False
+            else:
+                postprocessing["using_checkpoint"] = False
+                if best_score != "checkpoint":
+                    postprocessing["postprocessing"] = best_score
+                else:
+                    postprocessing["postprocessing"] = False
+
+            mlflow.log_dict(postprocessing, "postprocessing.json")
