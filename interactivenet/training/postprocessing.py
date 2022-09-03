@@ -165,7 +165,7 @@ if __name__=="__main__":
                     postprocessing["postprocessing"] = False
             else:
                 postprocessing["using_checkpoint"] = False
-                if best_score != "checkpoint":
+                if best_score != "standard":
                     postprocessing["postprocessing"] = best_score
                 else:
                     postprocessing["postprocessing"] = False

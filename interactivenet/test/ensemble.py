@@ -44,10 +44,17 @@ if __name__=="__main__":
     )
     parser.add_argument(
         "-w",
-        "--weights",
+        "--save_weights",
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Do you want to save weights as .npy in order to use in refinement?"
+    )
+    parser.add_argument(
+        "-n",
+        "--save_nifti",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Do you want to save the output as nifti?"
     )
     parser.add_argument(
         "-m",
@@ -56,6 +63,7 @@ if __name__=="__main__":
         default="mean",
         help="Do you want to use mean or vote ensembling (default = mean)"
     )
+    
 
     args = parser.parse_args()
     exp = os.environ["interactiveseg_processed"]
@@ -125,7 +133,7 @@ if __name__=="__main__":
                 output = np.stack([np.load(x)["weights"] for x in output], axis=0)
 
                 if args.method == "vote":
-                    if args.weights:
+                    if args.save_weights:
                         raise KeyError("Cannot use vote ensembling when you want to save weights")
                     output = np.stack([to_discrete_argmax(x) for x in output])
                 
@@ -145,12 +153,22 @@ if __name__=="__main__":
                 hausdorff[name] = hausdorff_distance.item()
                 surface[name] = surface_distance.item()
 
-                if args.weights:
+                if args.save_weights:
                     data_file = tmp_dir / f"{name}.npz"
 
                     np.savez(str(data_file), weights=weight, pred=output, label=label)
                     mlflow.log_artifact(str(data_file), artifact_path="weights")
                     data_file.unlink()
+                
+                if args.save_nifti:
+                    data_file = tmp_dir / f"{name}.nii.gz"
+                    meta_dict = raw_data[name]["image_meta_dict"]
+
+                    output = nib.Nifti1Image(output[1], meta_dict.get_sform())
+                    nib.save(output, str(data_file))
+                    mlflow.log_artifact(str(data_file), artifact_path="niftis")
+                    data_file.unlink()
+
 
             mlflow.log_metric("Mean dice", np.mean(list(dices.values())))
             mlflow.log_metric("Std dice", np.std(list(dices.values())))

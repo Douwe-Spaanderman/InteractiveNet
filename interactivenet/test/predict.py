@@ -4,6 +4,7 @@ import os
 import pickle
 import json
 import matplotlib.pyplot as plt
+import uuid
 
 from monai.utils import set_determinism
 from monai.transforms import (
@@ -35,7 +36,7 @@ from mlflow.utils.mlflow_tags import MLFLOW_PARENT_RUN_ID
 class Net(pl.LightningModule):
     def __init__(self, data, metadata, model):
         super().__init__()
-        self._model = mlflow.pytorch.load_model(model, map_location=torch.device('cpu'))
+        self._model = mlflow.pytorch.load_model(model, map_location=torch.device('cuda'))
         self.data = data
         self.metadata = metadata
         self.post_meta = EnsureType("numpy", device="cpu")
@@ -55,19 +56,19 @@ class Net(pl.LightningModule):
                 EnsureChannelFirstd(keys=["image", "annotation"]),
                 Resamplingd(
                     keys=["image", "annotation"],
-                    pixdim=metadata["Fingerprint"]["Target spacing"],
+                    pixdim=self.metadata["Fingerprint"]["Target spacing"],
                 ),
                 BoudingBoxd(
                     keys=["image", "annotation"],
                     on="annotation",
                     relaxation=0.1,
-                    divisiblepadd=metadata["Plans"]["divisible by"],
+                    divisiblepadd=self.metadata["Plans"]["divisible by"],
                 ),
                 NormalizeValuesd(
                     keys=["image"],
-                    clipping=metadata["Fingerprint"]["Clipping"],
-                    mean=metadata["Fingerprint"]["Intensity_mean"],
-                    std=metadata["Fingerprint"]["Intensity_std"],
+                    clipping=self.metadata["Fingerprint"]["Clipping"],
+                    mean=self.metadata["Fingerprint"]["Intensity_mean"],
+                    std=self.metadata["Fingerprint"]["Intensity_std"],
                 ),
                 EGDMapd(
                     keys=["annotation"],
@@ -75,7 +76,7 @@ class Net(pl.LightningModule):
                     lamb=1,
                     iter=4,
                     logscale=True,
-                    ct=metadata["Fingerprint"]["CT"],
+                    ct=self.metadata["Fingerprint"]["CT"],
                 ),
                 CastToTyped(keys=["image", "annotation"], dtype=(np.float32, np.float32)),
                 ConcatItemsd(keys=["image", "annotation"], name="image"),
@@ -100,13 +101,10 @@ class Net(pl.LightningModule):
         
         metas = [self.post_meta(i) for i in decollate_batch(batch["annotation_meta_dict"])]
 
-        weights = [i for i in decollate_batch(outputs)]
-        weights = [self.original_size(weight, meta) for weight, meta in zip(weights, metas)]
-
         outputs = [self.post_pred(i) for i in decollate_batch(outputs)]
         outputs = [self.original_size(output, meta) for output, meta in zip(outputs, metas)]
 
-        return outputs, weights, metas
+        return outputs, metas
 
 if __name__=="__main__":
     import argparse
@@ -178,7 +176,7 @@ if __name__=="__main__":
         network = Net(data, metadata, model)
 
         trainer = pl.Trainer(
-            gpus=0,
+            gpus=-1,
         )
 
         tmp_dir = Path(exp, str(uuid.uuid4()))
@@ -191,14 +189,14 @@ if __name__=="__main__":
             dices = {}
             hausdorff = {}
             surface = {}
-            for output, weight, meta in outputs:
-                output, weight, meta = output[0], weight[0], meta[0]
+            for weight, meta in outputs:
+                weight, meta = weight[0], meta[0]
                 name = Path(meta["filename_or_obj"]).name.split('.')[0]
 
                 image = raw_data[name]["image"]
                 label = raw_data[name]["masks"]
 
-                output = to_discrete_argmax(output)
+                output = to_discrete_argmax(weight)
                 f = ImagePlot(image, label, additional_scans=[output[0]], CT=metadata["Fingerprint"]["CT"])
                 mlflow.log_figure(f, f"images/{name}.png")
 
