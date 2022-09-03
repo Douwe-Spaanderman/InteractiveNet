@@ -26,6 +26,7 @@ from monai.data import Dataset, DataLoader, decollate_batch
 from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd, NormalizeValuesd, OriginalSize
 from interactivenet.utils.visualize import ImagePlot
 from interactivenet.utils.statistics import ResultPlot, CalculateScores
+from interactivenet.utils.postprocessing import ApplyPostprocessing
 
 import torch
 import pytorch_lightning as pl
@@ -197,6 +198,8 @@ if __name__=="__main__":
                 label = raw_data[name]["masks"]
 
                 output = to_discrete_argmax(weight)
+                output = ApplyPostprocessing(output, postprocessing["postprocessing"])
+
                 f = ImagePlot(image, label, additional_scans=[output[0]], CT=metadata["Fingerprint"]["CT"])
                 mlflow.log_figure(f, f"images/{name}.png")
 

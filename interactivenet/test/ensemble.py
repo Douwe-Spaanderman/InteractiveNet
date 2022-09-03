@@ -97,6 +97,7 @@ if __name__=="__main__":
     names = []
     metas = []
     outputs = []
+    postprocessing = []
     for idx, run in runs.iterrows():
         if run["tags.Mode"] == "testing":
             experiment = Path(run["artifact_uri"].split("//")[-1])
@@ -109,7 +110,12 @@ if __name__=="__main__":
             else:
                 raise ValueError("No weights are available to ensemble, please use predict with -w or --weights to save outputs as weights")
 
+            postprocessing = experiment / "postprocessing.json"
+            postprocessing.append(read_metadata(postprocessing, error_message="postprocessing hasn't been run yet, please do this before predictions")["postprocessing"])
+
             n += 1
+
+    postprocessing = max(set(postprocessing), key=postprocessing.count)
 
     print(f"founds {n} folds to use in ensembling")
     if n <= 1:
@@ -141,6 +147,8 @@ if __name__=="__main__":
                 weight = output.copy()
                 if args.method == "mean":
                     output = to_discrete_argmax(output)
+
+                output = ApplyPostprocessing(output, postprocessing)
 
                 f = ImagePlot(image, label, additional_scans=[output[0]], CT=metadata["Fingerprint"]["CT"])
                 mlflow.log_figure(f, f"images/{name}.png")

@@ -33,7 +33,7 @@ import mlflow.pytorch
 class Net(pl.LightningModule):
     def __init__(self, data, metadata, model, split=0, checkpoint=None):
         super().__init__()
-        self._model = mlflow.pytorch.load_model(model, map_location=torch.device('cpu'))
+        self._model = mlflow.pytorch.load_model(model, map_location=torch.device('cuda'))
         self.data = data
         self.metadata = metadata
         self.split = split
@@ -143,12 +143,11 @@ if __name__=="__main__":
         model = "runs:/" + run_id + "/model"
         ckpt = [x for x in Path(run["artifact_uri"].split('file://')[-1], "lightning_logs").glob("**/*.ckpt")][-1]
         with mlflow.start_run(run_id=run_id) as run:
-            mlflow.set_tag('Postprocessing', 'Done')
             artifact_path = Path(mlflow.get_artifact_uri().split('file://')[-1])
 
             network = Net(data, metadata, model, split=fold, checkpoint=ckpt)
             trainer = pl.Trainer(
-                gpus=0,
+                gpus=-1,
                 default_root_dir=artifact_path
             )
             
@@ -171,3 +170,4 @@ if __name__=="__main__":
                     postprocessing["postprocessing"] = False
 
             mlflow.log_dict(postprocessing, "postprocessing.json")
+            mlflow.set_tag('Postprocessing', 'Done')
