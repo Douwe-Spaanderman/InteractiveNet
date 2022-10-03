@@ -20,6 +20,7 @@ from monai.metrics import compute_meandice, compute_average_surface_distance, co
 
 from interactivenet.utils.visualize import ImagePlot
 from interactivenet.utils.statistics import ResultPlot, CalculateScores
+from interactivenet.utils.postprocessing import ApplyPostprocessing
 
 import nibabel as nib
 from interactivenet.utils.resample import resample_label

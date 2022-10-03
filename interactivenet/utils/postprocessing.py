@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from monai.transforms import (
     Compose,
     KeepLargestConnectedComponent,
@@ -12,8 +13,8 @@ def ApplyPostprocessing(output, method):
         postprocessing = KeepLargestConnectedComponent(applied_labels=None, connectivity=2)
     elif method == "fillholes_and_largestcomponent":
         postprocessing = Compose([
-            postprocessing = FillHoles(applied_labels=None, connectivity=2),
-            postprocessing = KeepLargestConnectedComponent(applied_labels=None, connectivity=2)
+            FillHoles(applied_labels=None, connectivity=2),
+            KeepLargestConnectedComponent(applied_labels=None, connectivity=2)
         ])
     else:
         return output
@@ -21,15 +22,15 @@ def ApplyPostprocessing(output, method):
     if len(output.shape) == 5:
         new_output = []
         for batch in output:
-            new_output.append(torch.stack([postprocessing(x) for x in batch], dim=0))
+            new_output.append(np.stack([postprocessing(x) for x in batch], axis=0))
 
-        output = torch.stack(new_output, dim=0)
+        output = np.stack(new_output, axis=0)
     elif len(output.shape) == 4:
         new_output = []
         for channel in output:
             new_output.append(postprocessing(channel))
 
-        output = torch.stack(new_output, dim=0)
+        output = np.stack(new_output, axis=0)
     else:
         output = postprocessing(output)
 

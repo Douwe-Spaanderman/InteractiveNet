@@ -27,6 +27,7 @@ from monai.transforms import (
 from monai.data import Dataset, DataLoader, decollate_batch
 from monai.metrics import compute_meandice, compute_average_surface_distance, compute_hausdorff_distance
 
+import nibabel as nib
 from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd, NormalizeValuesd
 from interactivenet.utils.visualize import ImagePlot
 from interactivenet.utils.statistics import ResultPlot, CalculateScores
