@@ -30,7 +30,7 @@ from monai.metrics import compute_meandice, compute_average_surface_distance, co
 import nibabel as nib
 from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd, NormalizeValuesd
 from interactivenet.utils.visualize import ImagePlot
-from interactivenet.utils.statistics import ResultPlot, CalculateScores, CalculateClinicalFeatures
+from interactivenet.utils.statistics import ResultPlot, ComparePlot, CalculateScores, CalculateClinicalFeatures
 from interactivenet.test.predict import Net
 
 import torch
@@ -63,6 +63,13 @@ if __name__=="__main__":
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Do you want to splits classes"
+    )
+    parser.add_argument(
+        "-a",
+        "--tta",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Do you want to use test time augmentations?"
     )
     parser.add_argument(
         "-w",
@@ -132,7 +139,7 @@ if __name__=="__main__":
         else:
             model = "runs:/" + run_id + "/model"
 
-        network = Net(data, metadata, model)
+        network = Net(data, metadata, model, tta=args.tta)
 
         trainer = pl.Trainer(
             gpus=-1,
@@ -160,6 +167,8 @@ if __name__=="__main__":
         dices = {}
         hausdorff = {}
         surface = {}
+        volume = {}
+        diameter = {}
         for weight, meta in zip(zip(*outputs), zip(*metas)):
             name = Path(meta[0]["filename_or_obj"]).name.split('.')[0]
             image = raw_data[name]["image"]
@@ -187,6 +196,10 @@ if __name__=="__main__":
             dices[name] = dice.item()
             hausdorff[name] = hausdorff_distance.item()
             surface[name] = surface_distance.item()
+
+            volume_pred, volume_gt, diameter_pred, diameter_gt = CalculateClinicalFeatures(image, output[1], label[1], raw_data[name]["image_meta_dict"])
+            volume[name] = {"gt": volume_gt, "pred": volume_pred}
+            diameter[name] = {"gt": diameter_gt, "pred": diameter_pred}
 
             if args.save_weights:
                 data_file = tmp_dir / f"{name}.npz"
@@ -222,4 +235,10 @@ if __name__=="__main__":
         plt.close("all")
         mlflow.log_figure(f, f"surface_distance.png")
         mlflow.log_dict(surface, "surface_distance.json")
+
+        f = ComparePlot(volume)
+        plt.close("all")
+        mlflow.log_figure(f, f"volume.png")
+        mlflow.log_dict(volume, "volume.json")
+        mlflow.log_dict(diameter, "diameter.json")
         tmp_dir.rmdir()
