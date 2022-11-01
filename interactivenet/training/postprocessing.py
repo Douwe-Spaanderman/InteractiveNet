@@ -135,8 +135,12 @@ if __name__=="__main__":
 
     mlflow.pytorch.autolog()
     for idx, run in runs.iterrows():
-        if run["tags.Mode"] != "training": #or run["tags.Postprocessing"] == "Done":
+        if run["tags.Mode"] != "training":
             continue
+        
+        if 'tags.Postprocessing' in run.index:
+            if run["tags.Postprocessing"] == "Done":
+                continue
         
         run_id = run["run_id"]
         fold = int(run["params.fold"])

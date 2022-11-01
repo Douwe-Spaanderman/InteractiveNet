@@ -30,7 +30,7 @@ from monai.metrics import compute_meandice, compute_average_surface_distance, co
 import nibabel as nib
 from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd, NormalizeValuesd
 from interactivenet.utils.visualize import ImagePlot
-from interactivenet.utils.statistics import ResultPlot, CalculateScores
+from interactivenet.utils.statistics import ResultPlot, CalculateScores, CalculateClinicalFeatures
 from interactivenet.test.predict import Net
 
 import torch

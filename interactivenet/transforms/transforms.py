@@ -4,17 +4,58 @@ import warnings
 import pickle
 import math
 from pathlib import Path
+import torch
+from itertools import combinations
 
 from monai.transforms.transform import MapTransform, Transform
-from monai.transforms import NormalizeIntensity, GaussianSmooth
+from monai.transforms import NormalizeIntensity, GaussianSmooth, Flip
 import numpy as np
 import GeodisTK
 from interactivenet.utils.resample import resample_image, resample_label, resample_annotation
 from interactivenet.utils.visualize import ImagePlot
 
-from bm4d import bm4d
-from skimage.restoration import denoise_tv_chambolle
+class TestTimeFlipping(Transform):
+    """
+        This transform class takes list of annotations to array.
+        That code is in:
+    """
 
+    def __init__(
+        self,
+        back=False,
+        all_dimensions=True,
+    ) -> None:
+        self.back = back
+        self.all_dimensions = all_dimensions
+
+    def __call__(self, image: torch.tensor) -> torch.tensor:
+        if self.all_dimensions:
+            spatial_axis = [0,1,2]
+        else: 
+            spatial_axis = [0,1]
+
+        all_combinations = []
+        for n in range(len(spatial_axis) + 1):
+            all_combinations +=  list(combinations(spatial_axis, n))
+
+        new_image = [image[0]]
+        if not self.back:
+            for spatial_axis in all_combinations[1:]:
+                flipping = Flip(spatial_axis=spatial_axis)
+                new_image += torch.stack([flipping(i[None,:]) for i in image[0]], dim=1)
+
+        else:
+            for idx, spatial_axis in enumerate(all_combinations[1:], 1):
+                flipping = Flip(spatial_axis=spatial_axis)
+                img = image[idx]
+                new_image += torch.stack([flipping(i[None,:]) for i in img], dim=1)
+
+        img = torch.stack(new_image)
+        print('Shape output')
+        print(img.shape)
+        print('')
+
+        return img
 
 class OriginalSize(Transform):
     """
@@ -358,11 +399,6 @@ class EGDMapd(MapTransform):
             if len(d[key].shape) == 4:
                 for idx in range(d[key].shape[0]):
                     image = d[self.image][idx]
-                    #if self.ct:
-                        #print('denoising')
-                        #image = bm4d(image.copy(), 1)
-                        #image = denoise_tv_chambolle(image.copy(), weight=0.5) 
-                        #image = self.gaussiansmooth(image.copy())
 
                     GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key][idx].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
                     if self.logscale == True:
@@ -371,11 +407,6 @@ class EGDMapd(MapTransform):
                     d[key][idx, :, :, :] = GD
             else:
                 image = d[self.image]
-                #if self.ct:
-                    #print('denoising')
-                    #image = bm4d(image.copy(), 1)
-                    #image = denoise_tv_chambolle(image.copy(), weight=0.5) 
-                    #image = self.gaussiansmooth(image.copy())
 
                 GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
                 if self.logscale == True:

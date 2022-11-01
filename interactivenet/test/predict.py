@@ -19,11 +19,19 @@ from monai.transforms import (
     DivisiblePadd,
     CastToTyped,
     EnsureType,
+    MeanEnsemble
 )
 
 from monai.data import Dataset, DataLoader, decollate_batch
 
-from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd, NormalizeValuesd, OriginalSize
+from interactivenet.transforms.transforms import (
+    Resamplingd, 
+    EGDMapd, 
+    BoudingBoxd, 
+    NormalizeValuesd, 
+    OriginalSize,
+    TestTimeFlipping
+)
 from interactivenet.utils.visualize import ImagePlot
 from interactivenet.utils.statistics import ResultPlot, CalculateScores
 from interactivenet.utils.postprocessing import ApplyPostprocessing
@@ -35,14 +43,13 @@ import mlflow.pytorch
 from mlflow.utils.mlflow_tags import MLFLOW_PARENT_RUN_ID
 
 class Net(pl.LightningModule):
-    def __init__(self, data, metadata, model):
+    def __init__(self, data, metadata, model, tta=False):
         super().__init__()
         self._model = mlflow.pytorch.load_model(model, map_location=torch.device('cuda'))
         self.data = data
         self.metadata = metadata
-        self.post_meta = EnsureType("numpy", device="cpu")
-        #self.post_pred = Compose([EnsureType("numpy", device="cpu"), AsDiscrete(argmax=True)])
-        self.post_pred = EnsureType("numpy", device="cpu")
+        self.tta = tta
+        self.post_numpy = EnsureType("numpy", device="cpu")
         self.original_size = OriginalSize(metadata["Fingerprint"]["Anisotropic"])
 
     def forward(self, x):
@@ -97,15 +104,27 @@ class Net(pl.LightningModule):
         return predict_loader
 
     def predict_step(self, batch, batch_idx):
-        images = batch["image"]
-        outputs = self.forward(images)
-        
-        metas = [self.post_meta(i) for i in decollate_batch(batch["annotation_meta_dict"])]
+        image = batch["image"]
+        if self.tta:
+            flip = TestTimeFlipping()
+            ensembling = MeanEnsemble()
 
-        outputs = [self.post_pred(i) for i in decollate_batch(outputs)]
-        outputs = [self.original_size(output, meta) for output, meta in zip(outputs, metas)]
+            image = flip(image)
+            output = self.forward(image)
+            
+            flip.back = True
+            output = flip(output)
+            output = ensembling(output)
+            output = [self.post_numpy(output)]
+        else:
+            output = self.forward(image)
+            output = [self.post_numpy(i) for i in decollate_batch(output)]
 
-        return outputs, metas
+
+        meta = [self.post_numpy(i) for i in decollate_batch(batch["annotation_meta_dict"])]
+        output = [self.original_size(output, meta) for output, meta in zip(output, meta)]
+
+        return output, meta
 
 if __name__=="__main__":
     import argparse
@@ -127,6 +146,13 @@ if __name__=="__main__":
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Do you want to splits classes"
+    )
+    parser.add_argument(
+        "-a",
+        "--tta",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Do you want to use test time augmentations?"
     )
     parser.add_argument(
         "-w",
@@ -174,7 +200,7 @@ if __name__=="__main__":
         else:
             model = "runs:/" + run_id + "/model"
 
-        network = Net(data, metadata, model)
+        network = Net(data, metadata, model, tta=args.tta)
 
         trainer = pl.Trainer(
             gpus=-1,

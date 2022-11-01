@@ -7,6 +7,7 @@ import numpy as np
 import torch
 
 import nibabel as nib
+import SimpleITK as sitk
 
 def read_nifti(data:Dict, test:bool=False):
     loaded_data = {}
@@ -100,4 +101,16 @@ def to_torch(data:Union[np.ndarray, torch.Tensor]):
     if isinstance(data, np.ndarray):
         data = torch.from_numpy(data)
 
+    return data
+
+def to_sitk(data:Union[np.ndarray, torch.Tensor], meta:Dict):
+    if isinstance(data, np.ndarray):
+        pass
+    elif isinstance(data, torch.Tensor):
+        data = data.detach().cpu().numpy()
+    else:
+        raise KeyError(f"please provide array or tensor not: {type(data)}")
+
+    data = sitk.GetImageFromArray(data, isVector=False)
+    data.SetSpacing(np.array(meta["pixdim"][1:4], dtype='float32').tolist())
     return data

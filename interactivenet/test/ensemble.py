@@ -19,7 +19,7 @@ from monai.transforms import (
 from monai.metrics import compute_meandice, compute_average_surface_distance, compute_hausdorff_distance
 
 from interactivenet.utils.visualize import ImagePlot
-from interactivenet.utils.statistics import ResultPlot, CalculateScores
+from interactivenet.utils.statistics import ResultPlot, ComparePlot, CalculateScores, CalculateClinicalFeatures
 from interactivenet.utils.postprocessing import ApplyPostprocessing
 
 import nibabel as nib
@@ -98,7 +98,6 @@ if __name__=="__main__":
     names = []
     metas = []
     outputs = []
-    postprocessing = []
     for idx, run in runs.iterrows():
         if run["tags.Mode"] == "testing":
             experiment = Path(run["artifact_uri"].split("//")[-1])
@@ -111,12 +110,7 @@ if __name__=="__main__":
             else:
                 raise ValueError("No weights are available to ensemble, please use predict with -w or --weights to save outputs as weights")
 
-            postprocessing = experiment / "postprocessing.json"
-            postprocessing.append(read_metadata(postprocessing, error_message="postprocessing hasn't been run yet, please do this before predictions")["postprocessing"])
-
             n += 1
-
-    postprocessing = max(set(postprocessing), key=postprocessing.count)
 
     print(f"founds {n} folds to use in ensembling")
     if n <= 1:
@@ -131,6 +125,8 @@ if __name__=="__main__":
             dices = {}
             hausdorff = {}
             surface = {}
+            volume = {}
+            diameter = {}
             tmp_dir = Path(exp, str(uuid.uuid4()))
             tmp_dir.mkdir(parents=True, exist_ok=True)
 
@@ -149,7 +145,7 @@ if __name__=="__main__":
                 if args.method == "mean":
                     output = to_discrete_argmax(output)
 
-                output = ApplyPostprocessing(output, postprocessing)
+                output = ApplyPostprocessing(output, method="fillholes_and_largestcomponent")
 
                 f = ImagePlot(image, label, additional_scans=[output[0]], CT=metadata["Fingerprint"]["CT"])
                 mlflow.log_figure(f, f"images/{name}.png")
@@ -161,6 +157,10 @@ if __name__=="__main__":
                 dices[name] = dice.item()
                 hausdorff[name] = hausdorff_distance.item()
                 surface[name] = surface_distance.item()
+
+                volume_pred, volume_gt, diameter_pred, diameter_gt = CalculateClinicalFeatures(image, output[1], label[1], raw_data[name]["image_meta_dict"])
+                volume[name] = {"gt": volume_gt, "pred": volume_pred}
+                diameter[name] = {"gt": diameter_gt, "pred": diameter_pred}
 
                 if args.save_weights:
                     data_file = tmp_dir / f"{name}.npz"
@@ -196,5 +196,11 @@ if __name__=="__main__":
             plt.close("all")
             mlflow.log_figure(f, f"surface_distance.png")
             mlflow.log_dict(surface, "surface_distance.json")
+
+            f = ComparePlot(volume)
+            plt.close("all")
+            mlflow.log_figure(f, f"volume.png")
+            mlflow.log_dict(volume, "volume.json")
+            mlflow.log_dict(diameter, "diameter.json")
             tmp_dir.rmdir()
             
