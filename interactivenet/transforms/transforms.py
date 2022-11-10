@@ -64,9 +64,11 @@ class OriginalSize(Transform):
 
     def __init__(
         self,
-        anisotrophic:bool
+        anisotrophic:bool,
+        resample:bool = True,
     ) -> None:
         self.anisotrophic = anisotrophic
+        self.resample =resample
 
     def __call__(self, img: np.ndarray, meta: Dict) -> np.ndarray:
         """
@@ -76,7 +78,11 @@ class OriginalSize(Transform):
         if (np.array(img[0,:].shape) != np.array(meta["final_bbox_shape"])).all():
             raise ValueError("image and metadata don't match so can't restore to original size")
 
-        new_size = tuple(meta["new_dim"])
+        if self.resample:
+            new_size = tuple(meta["new_dim"])
+        else:
+            new_size = tuple(meta["spatial_shape"])
+
         box_start = np.array(meta["final_bbox"])
         padding = [box_start[0], [
             new_size[0] - box_start[1][0],
@@ -108,7 +114,8 @@ class OriginalSize(Transform):
         if new_img[0].shape != new_size:
             raise ValueError("New img and new size do know have the same size??")
 
-        new_img = resample_image(new_img, meta["org_dim"], anisotrophy_flag=meta["anisotrophy_flag"])
+        if self.resample:
+            new_img = resample_image(new_img, meta["org_dim"], anisotrophy_flag=meta["anisotrophy_flag"])
 
         return new_img
 
@@ -355,6 +362,36 @@ class Resamplingd(MapTransform):
 
         return d
 
+class LoadWeightsd(MapTransform):
+    """
+        This transform class takes NNUNet's preprocessing method for reference.
+        That code is in:
+        https://github.com/MIC-DKFZ/nnUNet/blob/master/nnunet/preprocessing/preprocessing.py
+    """
+
+    def __init__(
+        self,
+        keys,
+        ref_image
+    ) -> None:
+        super().__init__(keys)
+        self.keys = keys
+        self.ref_image = ref_image
+
+    def __call__(self, data):
+        d = dict(data)
+        
+        img = d[self.ref_image]
+        for key in self.keys:
+            weights = np.load(d[key])[key]
+            if weights.shape[1:] != img.shape:
+                raise ValueError(f"Something went wrong with the weights and image shape, as they don't match. (weights: {weights.shape}, image: {img.shape}")
+
+            d[key] = weights
+            d[f"{key}_meta_dict"] = d[f"{self.ref_image}_meta_dict"]
+
+        return d
+
 class EGDMapd(MapTransform):
     """
         This transform class takes NNUNet's preprocessing method for reference.
@@ -371,6 +408,7 @@ class EGDMapd(MapTransform):
         logscale=True,
         ct=False,
         backup=False,
+        powerof=False,
     ) -> None:
         super().__init__(keys)
         self.keys = keys
@@ -380,6 +418,7 @@ class EGDMapd(MapTransform):
         self.logscale = logscale
         self.backup = backup
         self.ct = ct
+        self.powerof = powerof
         self.gaussiansmooth = GaussianSmooth(sigma=1)
 
     def __call__(self, data):
@@ -396,11 +435,19 @@ class EGDMapd(MapTransform):
             if self.backup:
                 d[f"{key}_backup"] = d[key].copy()
 
+            if "new_spacing" in d[f'{self.image}_meta_dict'].keys():
+                spacing = d[f'{self.image}_meta_dict']["new_spacing"]
+            else:
+                spacing = np.asarray(d[f'{self.image}_meta_dict']["pixdim"][1:4])
+
             if len(d[key].shape) == 4:
                 for idx in range(d[key].shape[0]):
                     image = d[self.image][idx]
+                        
+                    GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key][idx].astype(np.uint8), spacing.astype(np.float32), self.lamb, self.iter)
+                    if self.powerof:
+                        GD = GD**self.powerof
 
-                    GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key][idx].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
                     if self.logscale == True:
                         GD = np.exp(-GD)
 
@@ -408,7 +455,10 @@ class EGDMapd(MapTransform):
             else:
                 image = d[self.image]
 
-                GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key].astype(np.uint8), d[f'{self.image}_meta_dict']["new_spacing"].astype(np.float32), self.lamb, self.iter)
+                GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key].astype(np.uint8), spacing.astype(np.float32), self.lamb, self.iter)
+                if self.powerof:
+                    GD = GD**self.powerof
+                
                 if self.logscale == True:
                     GD = np.exp(-GD)
 
