@@ -220,6 +220,7 @@ class NormalizeValuesd(MapTransform):
         for key in self.keys:
             image = d[key]
             if self.clipping:
+                d[f"{key}_EGD"] = (image - self.mean) / self.std
                 image = np.clip(image, self.clipping[0], self.clipping[1])
                 image = (image - self.mean) / self.std
             else:
@@ -440,11 +441,17 @@ class EGDMapd(MapTransform):
             else:
                 spacing = np.asarray(d[f'{self.image}_meta_dict']["pixdim"][1:4])
 
+            if f"{self.image}_EGD" in d.keys():
+                image = d[f"{self.image}_EGD"]
+                del d[f'{self.image}_EGD']
+            else:
+                image = d[self.image]
+
             if len(d[key].shape) == 4:
                 for idx in range(d[key].shape[0]):
-                    image = d[self.image][idx]
+                    img = image[idx]
                         
-                    GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key][idx].astype(np.uint8), spacing.astype(np.float32), self.lamb, self.iter)
+                    GD = GeodisTK.geodesic3d_raster_scan(img.astype(np.float32), d[key][idx].astype(np.uint8), spacing.astype(np.float32), self.lamb, self.iter)
                     if self.powerof:
                         GD = GD**self.powerof
 
@@ -453,7 +460,6 @@ class EGDMapd(MapTransform):
 
                     d[key][idx, :, :, :] = GD
             else:
-                image = d[self.image]
 
                 GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key].astype(np.uint8), spacing.astype(np.float32), self.lamb, self.iter)
                 if self.powerof:
@@ -514,10 +520,19 @@ class BoudingBoxd(MapTransform):
 
         return bbox
 
-    def calculate_relaxtion(self, bbox_shape):
+    def calculate_relaxtion(self, bbox_shape, anisotropic=False):
         relaxation = [0] * len(bbox_shape)
-        for axis in range(len(bbox_shape)):
+        for i, axis in enumerate(range(len(bbox_shape))):
             relaxation[axis] = math.ceil(bbox_shape[axis] * self.relaxation[axis])
+
+            if anisotropic and i == 2: # This is only possible with Z on final axis 
+                check = 3
+            else:
+                check = 8
+
+            if relaxation[axis] < check:
+                print(f"relaxation was to small: {relaxation[axis]}, so adjusting it to {check}")
+                relaxation[axis] = check
 
         return relaxation
 
@@ -622,7 +637,7 @@ class BoudingBoxd(MapTransform):
 
         bbox = self.calculate_bbox(d[self.on][0])
         bbox_shape = np.subtract(bbox[1],bbox[0])
-        relaxation = self.calculate_relaxtion(bbox_shape)
+        relaxation = self.calculate_relaxtion(bbox_shape, d[f"{key}_meta_dict"]["anisotrophy_flag"])
 
         print(f"Original bouding box at location: {bbox[0]} and {bbox[1]} \t shape of bbox: {bbox_shape}")
         final_bbox, zeropadding = self.relax_bbox(d[self.on][0], bbox, relaxation)
