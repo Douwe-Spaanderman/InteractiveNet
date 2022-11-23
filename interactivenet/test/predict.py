@@ -231,7 +231,7 @@ if __name__=="__main__":
 
                 label = to_discrete(label[None,:])
                 output = to_discrete(output)
-                
+
                 dice, hausdorff_distance, surface_distance = CalculateScores(output, label)
                 dices[name] = dice.item()
                 hausdorff[name] = hausdorff_distance.item()

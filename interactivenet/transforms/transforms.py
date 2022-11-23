@@ -31,7 +31,7 @@ class TestTimeFlipping(Transform):
     def __call__(self, image: torch.tensor) -> torch.tensor:
         if self.all_dimensions:
             spatial_axis = [0,1,2]
-        else: 
+        else:
             spatial_axis = [0,1]
 
         all_combinations = []
@@ -103,9 +103,9 @@ class OriginalSize(Transform):
             box = channel[zero_padding[0][0]:zero_padding[1][0],zero_padding[0][1]:zero_padding[1][1],zero_padding[0][2]:zero_padding[1][2]]
             new_img.append(np.pad(
                 box, (
-                    (padding[0][0], padding[1][0]), 
-                    (padding[0][1], padding[1][1]), 
-                    (padding[0][2], padding[1][2])), 
+                    (padding[0][0], padding[1][0]),
+                    (padding[0][1], padding[1][1]),
+                    (padding[0][2], padding[1][2])),
                 method[i])
             )
 
@@ -381,7 +381,7 @@ class LoadWeightsd(MapTransform):
 
     def __call__(self, data):
         d = dict(data)
-        
+
         img = d[self.ref_image]
         for key in self.keys:
             weights = np.load(d[key])[key]
@@ -450,7 +450,7 @@ class EGDMapd(MapTransform):
             if len(d[key].shape) == 4:
                 for idx in range(d[key].shape[0]):
                     img = image[idx]
-                        
+
                     GD = GeodisTK.geodesic3d_raster_scan(img.astype(np.float32), d[key][idx].astype(np.uint8), spacing.astype(np.float32), self.lamb, self.iter)
                     if self.powerof:
                         GD = GD**self.powerof
@@ -464,7 +464,7 @@ class EGDMapd(MapTransform):
                 GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key].astype(np.uint8), spacing.astype(np.float32), self.lamb, self.iter)
                 if self.powerof:
                     GD = GD**self.powerof
-                
+
                 if self.logscale == True:
                     GD = np.exp(-GD)
 
@@ -500,7 +500,6 @@ class BoudingBoxd(MapTransform):
 
         self.relaxation = relaxation
         self.divisiblepadd = divisiblepadd
-        self.zeropadd = np.zeros(3)
 
     def calculate_bbox(self, data):
         inds_x, inds_y, inds_z = np.where(data > 0.5)
@@ -525,13 +524,13 @@ class BoudingBoxd(MapTransform):
         for i, axis in enumerate(range(len(bbox_shape))):
             relaxation[axis] = math.ceil(bbox_shape[axis] * self.relaxation[axis])
 
-            if anisotropic and i == 2: # This is only possible with Z on final axis 
+            if anisotropic and i == 2: # This is only possible with Z on final axis
                 check = 3
             else:
                 check = 8
 
             if relaxation[axis] < check:
-                print(f"relaxation was to small: {relaxation[axis]}, so adjusting it to {check}")
+                warnings.warn(f"relaxation was to small: {relaxation[axis]}, so adjusting it to {check}")
                 relaxation[axis] = check
 
         return relaxation
@@ -560,7 +559,7 @@ class BoudingBoxd(MapTransform):
         largest_dimension = [int(x) if  x <= data.shape[i] else data.shape[i] for i, x in enumerate(bbox[1])]
         bbox = np.array([bbox[0].tolist(), largest_dimension])
 
-        zeropadding = self.zeropadd.copy()
+        zeropadding = np.zeros(3)
         if self.divisiblepadd:
             for axis in range(len(self.divisiblepadd)):
                 expand = True
@@ -590,7 +589,7 @@ class BoudingBoxd(MapTransform):
                             if pos <= data.shape[axis]:
                                 bbox[1][axis] = pos
 
-                            if neg <= 0 and pos >= data.shape[axis]:
+                            if neg <= 0 and pos > data.shape[axis]:
                                 zeropadding[axis] = zeropadding[axis] + residue
                                 warnings.warn(f"bbox doesn't fit in the image for axis {axis}, adding zero padding {residue}")
                                 expand = False
@@ -616,9 +615,9 @@ class BoudingBoxd(MapTransform):
 
         new_region = np.pad(
             new_region, (
-                (padding[0][0], padding[1][0]), 
-                (padding[0][1], padding[1][1]), 
-                (padding[0][2], padding[1][2])), 
+                (padding[0][0], padding[1][0]),
+                (padding[0][1], padding[1][1]),
+                (padding[0][2], padding[1][2])),
             'constant')
 
         return new_region
@@ -642,7 +641,7 @@ class BoudingBoxd(MapTransform):
         print(f"Original bouding box at location: {bbox[0]} and {bbox[1]} \t shape of bbox: {bbox_shape}")
         final_bbox, zeropadding = self.relax_bbox(d[self.on][0], bbox, relaxation)
         final_bbox_shape = np.subtract(final_bbox[1],final_bbox[0])
-        print(f"Bouding box at location: {final_bbox[0]} and {final_bbox[1]} \t bbox is relaxt with: {relaxation} \t and made divisible with: {self.divisiblepadd} \t shape after cropping: {final_bbox_shape}")
+        print(f"Bouding box at location: {final_bbox[0]} and {final_bbox[1]} \t bbox is relaxt with: {relaxation} \t and zero_padding: {zeropadding} \t and made divisible with: {self.divisiblepadd} \t shape after cropping: {final_bbox_shape}")
         for key in self.keys:
             if len(d[key].shape) == 4:
                 new_dkey = []
