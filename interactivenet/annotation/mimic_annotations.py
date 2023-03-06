@@ -24,7 +24,6 @@ class MaskItem(object):
         self.Direction = self.Image.GetDirection()
         self.Image = self._from_simpleITK(self.Image)
         self.Dimensions = self.Mask.shape
-        print(self.Mask.shape)
         self.inds_z, self.inds_y, self.inds_x = np.where(self.Mask > 0.5)
         self.Cropped = False
         self.RandomPoints = None
@@ -112,6 +111,7 @@ class MaskItem(object):
         self.BoudingBox[self.BoudingBox < 0] = 0
         largest_dimension = [int(x) if  x <= self.Dimensions[i] else self.Dimensions[i] for i, x in enumerate(self.BoudingBox[1])]
         self.BoudingBox = np.array([self.BoudingBox[0].tolist(), largest_dimension])
+        print(self.BoudingBox)
 
     def crop_from_bbox(self):
         self.ChangedMask = self.ChangedMask[
