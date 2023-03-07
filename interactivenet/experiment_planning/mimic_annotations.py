@@ -9,10 +9,16 @@ import numpy as np
 from pathlib import Path
 from scipy import ndimage
 
+from typing import Union, Optional, List
+
 from interactivenet.utils.visualize import ImagePlot
 
-class MaskItem(object):
-    def __init__(self, Mask, Image):
+class MaskedItem(object):
+    def __init__(
+        self, 
+        Mask:Path, 
+        Image:Path
+        ):
         self.MaskName = Mask.name
         self.ImageName = Image.name
         self.AnnotationName = Mask.name
@@ -23,6 +29,7 @@ class MaskItem(object):
         self.Origin = self.Image.GetOrigin()
         self.Direction = self.Image.GetDirection()
         self.Image = self._from_simpleITK(self.Image)
+        self.Anisotropic = self._check_Anisotropic()
         self.Dimensions = self.Mask.shape
         self.inds_z, self.inds_y, self.inds_x = np.where(self.Mask > 0.5)
         self.Cropped = False
@@ -80,6 +87,12 @@ class MaskItem(object):
         sel_id = ids[0][random.randint(0, len(ids[0]) - 1)]
         return [id_z[sel_id], id_y[sel_id], id_x[sel_id]]
 
+    def _check_Anisotropic(self):
+        def check(spacing):
+            return np.max(spacing) / np.min(spacing) >= 3
+
+        return check(self.Spacing)
+
     def find_border(self, iterations=1) -> None:
         matrix = np.copy(self.ChangedMask)
         matrix = ndimage.binary_erosion(matrix, iterations=iterations).astype(matrix.dtype)
@@ -111,7 +124,6 @@ class MaskItem(object):
         self.BoudingBox[self.BoudingBox < 0] = 0
         largest_dimension = [int(x) if  x <= self.Dimensions[i] else self.Dimensions[i] for i, x in enumerate(self.BoudingBox[1])]
         self.BoudingBox = np.array([self.BoudingBox[0].tolist(), largest_dimension])
-        print(self.BoudingBox)
 
     def crop_from_bbox(self):
         self.ChangedMask = self.ChangedMask[
@@ -134,7 +146,6 @@ class MaskItem(object):
 
         self.Cropped = True
         self.Dimensions = self.Mask.shape
-        print(self.Mask.shape())
         self.inds_z, self.inds_y, self.inds_x = np.where(self.Mask > 0.5)
 
         if self.NewMask is not None:
@@ -241,8 +252,20 @@ class MaskItem(object):
         # Uncomment processed mask for dev
         #self._save_Image(self._to_simpleITK(self.ChangedMask), str(location / "processed_mask.nii.gz"))
 
-def create_sample(input_mask, input_image=None, border=None, extreme_points=None, random_points=None, center_point=None, scribble=False, mode="Tr", save=None, plot=None, gif=False):
-    data = MaskItem(input_mask, input_image)
+def create_sample(
+    input_mask:Union[str, Path], 
+    input_image:Union[str, Path] =None, 
+    border:bool=False, 
+    extreme_points:Optional[Union[str, List[str]]]=None, 
+    random_points:Optional[int]=None, 
+    center_point:bool=False, 
+    scribble:bool=False, 
+    mode:str="Tr", 
+    save:bool=False, 
+    plot:bool=False, 
+    gif:bool=False
+    ):
+    data = MaskedItem(input_mask, input_image)
 
     data.get_bbox(pad=[1,3,3])
 
@@ -251,7 +274,17 @@ def create_sample(input_mask, input_image=None, border=None, extreme_points=None
 
     overlap = []
     if extreme_points:
-        overlap.append(data.extreme_points(move_internal=[int(x) for x in extreme_points]))
+        if extreme_points == "default":
+            if not data.Anisotropic:
+                extreme_points = [5, 5, 5]
+            else:
+                extreme_points = [1, 5, 5]
+
+            print(f"Using default settings for extreme points: {extreme_points}")
+        else:
+            extreme_points = [int(x) for x in extreme_points]
+
+        overlap.append(data.extreme_points(move_internal=extreme_points))
 
     if random_points:
         overlap.append(data.random_points(n=int(random_points)))
@@ -268,7 +301,8 @@ def create_sample(input_mask, input_image=None, border=None, extreme_points=None
 
         data.save(save, mode=mode)
 
-    print('Plotting is not working atm')
+    if plot:
+        print('Plotting is not working atm')
     """
     if plot and save:
         newmask = data.crop_from_bbox()
@@ -296,43 +330,92 @@ def create_sample(input_mask, input_image=None, border=None, extreme_points=None
         data.show(overlap=newmask, zslices=list(range(0,newmask.shape[0],1)), show=True, gif=gif)
     """
 
+def create_experiment(
+    task:str,
+    border:bool=False, 
+    extreme_points:Optional[Union[str, List[str]]]=None, 
+    random_points:Optional[int]=None, 
+    center_point:bool=False, 
+    scribble:bool=False, 
+    plot:bool=False, 
+    gif:bool=False
+    ):
+    
+    inpath = Path(os.environ["interactiveseg_raw"], task)
+    number_images = 0
+    for mode in ["Tr", "Ts"]:
+        labels = sorted([f for f in Path(inpath, "labels" + mode).glob('**/*') if f.is_file()])
+        images = sorted([f for f in Path(inpath, "images" + mode).glob('**/*') if f.is_file()])
+
+        for label, image in zip(labels, images):
+            create_sample(
+                input_mask = label,
+                input_image = image,
+                border = border,
+                extreme_points = extreme_points,
+                random_points = random_points,
+                center_point = center_point,
+                scribble=False,
+                mode = mode,
+                save = inpath,
+                plot = plot,
+                gif = gif,
+            )
+
+        number_images += len(images)
+
+    if inpath:
+        dataset_name = Path(inpath).name
+        with open(str(inpath / 'metadata.json'), 'w') as f:
+            json.dump({
+                "Info" : "Metadata for scribble/point minimal interactive segmentation. Point have been drawn automatically using the mask of the image",
+                "Dataset" : {
+                    "Name" : f"{dataset_name}",
+                    "Number" : f"{number_images}"
+                },
+                "Output": {
+                    "image": "file with the unchanged image (.nii.gz)",
+                    "masks": "file with the unchanged mask (.nii.gz)",
+                    "points": "file with points drawn using this experiment (.nii.gz)",
+                },
+                "Arguments" : {
+                    "border" : f"{border}",
+                    "extreme_points": f"{extreme_points}",
+                    "random_points": f"{random_points}",
+                    "center_point": f"{center_point}",
+                    "plot": f"{plot}",
+                    "gif": f"{gif}",
+                },
+                "Explanation" : {
+                    "border" : f"If not None, all points have been drawn from the border. Otherwise the can be drawn from anywhere in the mask",
+                    "extreme_points": f"If not None, extreme points are found for the mask, which in a 3D image are 6 points, i.e. two extremes for each axis. Also the list provided, e.g. [1,3,3] ([z,y,x]), specifies the relaxtion to the middle of the extreme points. This can be done in order to mimic errors from the clinicians, i.e. they won't find the optimal extreme points",
+                    "random_points": f"If not None, random points are drawn from the mask or border (see argument border). Will be type(int) specifying the number of random points drawn",
+                    "plot": f"If not None, this means that images are saved",
+                    "gif": f"If not None, this means that images are saved as gifs",
+                },
+            }, f, indent=4)
+
 def main():
     parser = argparse.ArgumentParser(
 		description="Create annotations from masks, in order to do minimally interactive segmentation experiments"
 		)
     parser.add_argument(
-        "-i",
-        "--inpath",
-        nargs="?",
-        default="data/raw/LIPO/",
-        help="Path to input folder"
-        )
-    parser.add_argument(
-        "-o",
-        "--outpath",
-        nargs="?",
-        default="data/exp/",
-        help="Path to store output file"
-        )
-    parser.add_argument(
-        "-n",
-        "--name",
-        nargs="?",
-        default="Lipo",
-        help="Name of task"
+        "-t",
+        "--task",
+        help="Task name"
         )
     parser.add_argument(
         "-b",
         "--border",
-        nargs="?",
-        default=None,
+        default=False,
+        action=argparse.BooleanOptionalAction,
         help="Do you want to look in the border only"
         )
     parser.add_argument(
         "-e",
         "--extreme_points",
         nargs="+",
-        default=None,
+        default="default",
         help="Do you want to get extreme points"
         )
     parser.add_argument(
@@ -345,83 +428,40 @@ def main():
     parser.add_argument(
         "-c",
         "--center_point",
-        nargs="?",
-        default=None,
+        default=False,
+        action=argparse.BooleanOptionalAction,
         help="Do you want to get the center point"
         )
     parser.add_argument(
         "-s",
         "--plot",
-        nargs="?",
-        default=None,
+        default=False,
+        action=argparse.BooleanOptionalAction,
         help="Do you want to plot the images"
         )
     parser.add_argument(
         "-g",
         "--gif",
-        nargs="?",
-        default=None,
+        default=False,
+        action=argparse.BooleanOptionalAction,
         help="Do you want to plot the images as gifs"
         )
     args = parser.parse_args()
 
     # This is stupid but whatever
     if args.extreme_points and len(args.extreme_points) != 3:
-        raise KeyError(f"argument extreme_points (-e) should either be None or a list of 3 not: {args.extreme_points}")
+        if args.extreme_points != "default":
+            raise KeyError(f"argument extreme_points (-e) should either be None, default or a list of 3 not: {args.extreme_points}")
 
-    output_folder = Path(args.outpath, args.name)
-    Dataset_numb = 0
-    for mode in ["Tr", "Ts"]:
-        labels = sorted([f for f in Path(args.inpath, "labels" + mode).glob('**/*') if f.is_file()])
-        images = sorted([f for f in Path(args.inpath, "images" + mode).glob('**/*') if f.is_file()])
-
-        for label, image in zip(labels, images):
-            create_sample(
-                input_mask = label,
-                input_image = image,
-                border = args.border,
-                extreme_points = args.extreme_points,
-                random_points = args.random_points,
-                center_point = args.center_point,
-                scribble=False,
-                mode = mode,
-                save = output_folder,
-                plot = args.plot,
-                gif = args.gif,
-            )
-
-        Dataset_numb += len(images)
-
-    if output_folder:
-        Dataset_name = Path(args.inpath).name
-        with open(str(output_folder / 'metadata.json'), 'w') as f:
-            json.dump({
-                "Info" : "Metadata for scribble/point minimal interactive segmentation. Point have been drawn automatically using the mask of the image",
-                "Dataset" : {
-                    "Name" : f"{Dataset_name}",
-                    "Number" : f"{Dataset_numb}"
-                },
-                "Output": {
-                    "image": "file with the unchanged image (.nii.gz)",
-                    "masks": "file with the unchanged mask (.nii.gz)",
-                    "points": "file with points drawn using this experiment (.nii.gz)",
-                },
-                "Arguments" : {
-                    "border" : f"{args.border}",
-                    "extreme_points": f"{args.extreme_points}",
-                    "random_points": f"{args.random_points}",
-                    "center_point": f"{args.center_point}",
-                    "plot": f"{args.plot}",
-                    "gif": f"{args.gif}",
-                },
-                "Explanation" : {
-                    "border" : f"If not None, all points have been drawn from the border. Otherwise the can be drawn from anywhere in the mask",
-                    "extreme_points": f"If not None, extreme points are found for the mask, which in a 3D image are 6 points, i.e. two extremes for each axis. Also the list provided, e.g. [1,3,3] ([z,y,x]), specifies the relaxtion to the middle of the extreme points. This can be done in order to mimic errors from the clinicians, i.e. they won't find the optimal extreme points",
-                    "random_points": f"If not None, random points are drawn from the mask or border (see argument border). Will be type(int) specifying the number of random points drawn",
-                    "plot": f"If not None, this means that images are saved",
-                    "gif": f"If not None, this means that images are saved as gifs",
-                },
-            }, f, indent=4)
+    create_experiment(
+        task=args.task, 
+        border=args.border, 
+        extreme_points=args.extreme_points,
+        random_points=args.random_points,
+        center_point=args.center_point,
+        scribble=False, # Not implemented at this time
+        plot=args.plot,
+        gif=args.gif)
 
 if __name__ == "__main__":
     main()

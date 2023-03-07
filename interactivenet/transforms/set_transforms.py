@@ -6,7 +6,6 @@ from monai.transforms import (
     DivisiblePadd,
 )
 
-# I want something which can take the right transforms and is able to take arguments
 class GenericTransform(object):
     def __init__(self) -> None:
         self.transform = []

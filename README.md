@@ -1,13 +1,13 @@
 # InteractiveNet
 
 Automatic segmentation has success in a variety of application throughout medical imaging. However, there could be a couple of reasons for automatic segmentation to fall short of providing accurate segmentations:
-1. Object are irregular and/or lobulated, which creates difficult segmentation task.
-2. It is impossible to encompass all heterogeneity from the patient population in a training dataset.
-3. It is difficult to create a (large) annotated dataset.
+- Object are irregular and/or lobulated, which creates difficult segmentation task.
+- It is impossible to encompass all heterogeneity from the patient population in a training dataset.
+- It is difficult to create a (large) annotated dataset.
 
 Here, we address this issue by using knowledge from a trained clinician to guide a 3D U-Net to improve segmentations. This is done using six interior margin points, i.e. extreme point in each axis. In theory, this approach should provide accurate segmentations for object or on modalities not seen during the training of the model. Currently, this has been assessed in various types of Soft-Tissue Tumors.
 
-Inspired by [nnU-Net](https://github.com/MIC-DKFZ/nnUNet), InteractiveNet uses dataset properties like imaging modality, voxel spacing, and image size to determine the best possible configuration for preprocessing, training, postprocessing, ensembling, and much more to provide a miminally interactive segmenation pipeline. By providing this framework, we hope to enable the use of minimally interactive segmentation for many more applications in medical imaging. **We provide the option to generate interior margin points synthetically from ground truth segmentation**
+Inspired by [nnU-Net](https://github.com/MIC-DKFZ/nnUNet), InteractiveNet uses dataset properties like imaging modality, voxel spacing, and image size to determine the best possible configuration for preprocessing, training, postprocessing, ensembling, and much more to provide a miminally interactive segmenation pipeline. By providing this framework, we hope to enable the use of minimally interactive segmentation for many more applications in medical imaging. **We provide the option to generate interior margin points [synthetically](documentation/synthetic_interactions.md) from ground truth segmentation**, which is ideal for pilot studies.
 
 # Table of Contents
 - [InteractiveNet](#interactivenet)
