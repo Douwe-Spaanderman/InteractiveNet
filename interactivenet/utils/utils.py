@@ -9,6 +9,22 @@ import torch
 import nibabel as nib
 import SimpleITK as sitk
 
+def read_dataset(datapath:Union[str, PosixPath], mode="train", error_message=None):
+    if isinstance(datapath, str):
+        datapath = Path(datapath)
+
+    datapath = datapath / "dataset.json"
+
+    if datapath.is_file():
+        with open(datapath) as f:
+            dataset = json.load(f)
+            return dataset[mode], dataset["modality"]
+    else:
+        if error_message:
+            raise KeyError(error_message)
+        else:
+            raise KeyError(f"dataset.json does not exist at path: {datapath}")
+
 def read_nifti(data:Dict, test:bool=False):
     loaded_data = {}
     for idx in data:

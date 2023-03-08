@@ -483,7 +483,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Create annotations from masks, in order to do minimally interactive segmentation experiments"
     )
-    parser.add_argument("-t", "--task", help="Task name")
+    parser.add_argument("-t", "--task", required=True, help="Task name")
     parser.add_argument(
         "-b",
         "--border",

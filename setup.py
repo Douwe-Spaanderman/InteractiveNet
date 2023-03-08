@@ -26,7 +26,9 @@ setup(
     setup_requires=['pytest', 'black', 'setuptools'],
     entry_points={
         'console_scripts': [
-            'interactivenet_mimic_interactions=interactivenet.experiment_planning.mimic_annotations:main'
+            'interactivenet_mimic_interactions=interactivenet.experiment_planning.mimic_annotations:main',
+            'interactivenet_generate_dataset_json=interactivenet.experiment_planning.generate_dataset_json:main',
+            'interactivenet_fingerprinting=interactivenet.experiment_planning.fingerprinting:main'
             ]
     },
     keywords=[
