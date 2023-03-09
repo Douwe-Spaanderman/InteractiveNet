@@ -45,7 +45,7 @@ Interactivenet installs several new commands to your terminal, which are used to
 Using InteractiveNet requires you to structure your dataset in a format closely following the data structure of [Medical Segmentation Decthlon](http://medicaldecathlon.com/). How to convert your dataset to be compatible with InteractiveNet can be found [here](documentation/dataset_conversion.md). Also, for InteractiveNet interior margin points are required, if it is not possible to create these interactions manual, we provide options to derive these interactions
 [synthetically](documentation/synthetic_interactions.md)
 
-### Fingerprinting and preprocessing
+## Fingerprinting and preprocessing
 InteractiveNet uses fingerprinting of the dataset to determine the best strategy for preprocessing and determines best network configurations. you can run fingerprinting, experiment planning and processing in one go using:
 
 ```
@@ -58,15 +58,28 @@ Using ```-h``` or ```--help``` for planning and processing gives you multiple op
 
 Note, that together, depending on how powerful your CPU is, running planning and preprocessing might take up to half an hour.
 
-### Training
+## MLflow 
 
-### Inference
+We use MLflow to automatically log the interactivenet pipeline from training to testing your models. If you are not familiar with MLflow, please visit [here](https://mlflow.org/) for more information. Additionally, [here](documentation/mlflow.md) we have provided documentation to guide you to access MLflow. **Note that you cannot access MLflow without training atleast 1 model/fold**
+
+## Training
+InteractiveNet uses five fold cross-validation in order to use ensembling and define best postprocessing steps. You need to train all folds (default = 5), otherwise inference does not work.
+
+To train interactivenet for all FOLDS in [0, 1, 2, 3, 4] (if default number of folds is selected), run:
+
+```
+interactivenet_train -t TaskXXX_YOURTASK -f FOLD
+```
+
+Additional options can be found under ```-h``` or ```--help```.
+
+All experiments results as well as trained models can be found in the interactivenet_results folder. Tracking experiments and visualizing results is done in MLflow, for which documentation can be found [here](documentation/mlflow.md).
+
+## Inference
 
 ## Running using a pretrained model
 
-### GUI
-
-### Command line
+# GUI
 
 # Roadmap 
 - [ ] Example of running InteractiveNet

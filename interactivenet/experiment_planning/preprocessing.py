@@ -9,7 +9,7 @@ import argparse
 
 from monai.data import Dataset as MonaiDataset
 
-from interactivenet.utils.utils import read_dataset
+from interactivenet.utils.utils import read_dataset, read_metadata
 from interactivenet.transforms.set_transforms import processing_transforms
 
 class Preprocessing(MonaiDataset):
@@ -65,8 +65,6 @@ class Preprocessing(MonaiDataset):
             item = self.__getitem__(i)
 
             metainfo[name] = self.create_metainfo(item)
-
-            self.save_sample(item, name)
             print("")
 
         with open(self.processed_path / "metadata.pkl", 'wb') as handle:
@@ -96,20 +94,6 @@ class Preprocessing(MonaiDataset):
             "final_size" : metadata["final_bbox_shape"],
         }
 
-    def save_sample(self, item:Dict[str, Union[np.ndarray, dict]], name:str) -> None:
-        keys = list(item.keys())
-        objects = [False if x.endswith("_meta_dict") or x.endswith("_transforms") else True for x in keys]
-        objects = sum(objects)
-
-        np.savez(self.input_folder / name, **{key : item[key] for key in keys[:objects]})
-
-        pickle_data = {
-            key : item[key] for key in keys[objects:]
-        }
-
-        with open(self.input_folder.parent / "network_input" / (name + ".pkl"), 'wb') as handle:
-            pickle.dump(pickle_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
 def main():
     parser = argparse.ArgumentParser(description="InteractiveNet Processing")
     parser.add_argument("-t", "--task", required=True, type=str, help="Task name")
@@ -126,11 +110,7 @@ def main():
     data, modalities = read_dataset(raw_path)
 
     plans = Path(os.environ["interactiveseg_processed"], args.task, "plans.json")
-    if not plans.is_file():
-        raise KeyError("Please run fingerprinting before processing data.")
-    
-    with open(plans) as f:
-        plans = json.load(f)
+    plans = read_metadata(plans, error_message="Please run fingerprinting before processing data.")
 
     preprocess = Preprocessing(
         task=args.task,

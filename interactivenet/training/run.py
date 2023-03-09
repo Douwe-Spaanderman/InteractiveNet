@@ -5,26 +5,13 @@ import json
 import argparse
 
 from monai.utils import set_determinism
-from monai.transforms import (
-    AsDiscrete,
-    Compose,
-    RandFlipd,
-    RandScaleIntensityd,
-    ConcatItemsd,
-    ToTensord,
-    SpatialPadd,
-    RandGaussianNoised,
-    RandGaussianSmoothd,
-    CastToTyped,
-    RandAdjustContrastd,
-    RandZoomd,
-    RandRotated,
-)
+from monai.transforms import AsDiscrete
 from monai.networks.nets import DynUNet
 from monai.metrics import DiceMetric
 from monai.losses import DiceCELoss
 from monai.data import Dataset, DataLoader, decollate_batch
 
+from interactivenet.transforms.set_transforms import training_transforms
 from interactivenet.transforms.transforms import LoadPreprocessed
 from interactivenet.networks.unet import UNet
 
@@ -33,6 +20,8 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 
 import mlflow.pytorch
+from interactivenet.utils.mlflow import mlflow_get_id
+from interactivenet.utils.utils import read_processed, read_metadata, check_gpu
 
 class Net(pl.LightningModule):
     def __init__(self, data, metadata, split=0, filters=[4, 8, 16, 32, 64, 128]):
@@ -61,64 +50,21 @@ class Net(pl.LightningModule):
         self.best_val_epoch = 0
         self.max_epochs = 500
         self.batch_size = 1
+        self.seed = self.metadata["Plans"]["seed"]
         self.supervision_weights = metadata["Plans"]["deep supervision weights"]
 
     def forward(self, x):
         return self._model(x)
 
     def prepare_data(self):
-        set_determinism(seed=0)
-
-        train_transforms = Compose(
-            [
-                LoadPreprocessed(keys=["npz", "metadata"], new_keys=["image", "annotation", "mask"]),
-                RandRotated(
-                    keys=["image", "annotation", "mask"],
-                    range_x=180,
-                    range_y=180,
-                    mode=("bilinear", "bilinear", "nearest"),
-                    align_corners=(True, True, None),
-                    prob=0.2,
-                ),
-                RandZoomd(
-                    keys=["image", "annotation", "mask"],
-                    min_zoom=0.7,
-                    max_zoom=1.4,
-                    mode=("trilinear", "trilinear", "nearest"),
-                    align_corners=(True, True, None),
-                    prob=0.2,
-                ),
-                RandGaussianNoised(keys=["image"], std=0.01, prob=0.15),
-                RandGaussianSmoothd(
-                    keys=["image"],
-                    sigma_x=(0.5, 1.5),
-                    sigma_y=(0.5, 1.5),
-                    sigma_z=(0.5, 1.5),
-                    prob=0.2,
-                ),
-                RandScaleIntensityd(keys=["image"], factors=0.3, prob=0.15),
-                RandAdjustContrastd(keys=["image"], gamma=(0.65, 1.5), prob=0.15),
-                RandFlipd(keys=["image", "annotation", "mask"], spatial_axis=[0], prob=0.5),
-                RandFlipd(keys=["image", "annotation", "mask"], spatial_axis=[1], prob=0.5),
-                RandFlipd(keys=["image", "annotation", "mask"], spatial_axis=[2], prob=0.5),
-                CastToTyped(keys=["image", "annotation", "mask"], dtype=(np.float32, np.float32, np.uint8)),
-                ConcatItemsd(keys=["image", "annotation"], name="image"),
-                ToTensord(keys=["image", "mask"]),
-                ]
-        )
-        
-        val_transforms = Compose(
-            [
-                LoadPreprocessed(keys=["npz", "metadata"], new_keys=["image", "annotation", "mask"]),
-                CastToTyped(keys=["image", "annotation", "mask"], dtype=(np.float32, np.float32, np.uint8)),
-                ConcatItemsd(keys=["image", "annotation"], name="image"),
-                ToTensord(keys=["image", "mask"]),
-            ]
-        )
+        set_determinism(seed=self.seed)
 
         split = self.metadata["Plans"]["splits"][self.split]
         train_data = [x for x in self.data if x['npz'].stem in split['train']]
         val_data = [x for x in self.data if x['npz'].stem in split['val']]
+
+        train_transforms = training_transforms(seed=self.seed)
+        val_transforms = training_transforms(validation = True)
 
         self.train_ds = Dataset(
             data=train_data, transform=train_transforms,
@@ -157,8 +103,7 @@ class Net(pl.LightningModule):
         return loss
 
     def training_step(self, batch, batch_idx):
-        images, labels = batch["image"], batch["mask"]
-        print(images.shape)
+        images, labels = batch["image"], batch["label"]
         outputs = self.forward(images)
         loss = self._compute_loss(outputs, labels)
 
@@ -170,8 +115,7 @@ class Net(pl.LightningModule):
         self.log("lr", self.lr_scheduler["scheduler"].get_last_lr()[0])
 
     def validation_step(self, batch, batch_idx):
-        images, labels = batch["image"], batch["mask"]
-        print(images.shape)
+        images, labels = batch["image"], batch["label"]
         outputs = self.forward(images)
         loss = self._compute_loss(outputs, labels)
 
@@ -199,35 +143,37 @@ class Net(pl.LightningModule):
             f"\nbest mean dice: {self.best_val_dice:.4f} "
             f"at epoch: {self.best_val_epoch}"
         )
-        self.log("curent epoch", self.current_epoch, on_epoch=True)
+        self.log("current epoch", self.current_epoch, on_epoch=True)
         self.log("current mean dice", mean_val_dice, on_epoch=True)
         self.log("best mean dice", self.best_val_dice, on_epoch=True)
         self.log("at epoch", self.best_val_epoch, on_epoch=True)
         return mean_val_dice, mean_val_loss
 
-if __name__=="__main__":
+def main():
     parser = argparse.ArgumentParser(
-             description="Preprocessing of "
+             description="Training of the interactivenet network"
          )
-    parser.add_argument(
-         "-t",
-         "--task",
-         nargs="?",
-         default="Task710_STTMRI",
-         help="Task name"
-    )
+    parser.add_argument("-t", "--task", required=True, type=str, help="Task name")
     parser.add_argument(
          "-f",
          "--fold",
-         nargs="?",
-         default=0,
+         required=True,
          type=int,
          help="which fold do you want to train?"
     )
+    parser.add_argument(
+         "-e",
+         "--epochs",
+         nargs="?",
+         default=500,
+         type=int,
+         help="How many epochs do you want to train?"
+    )
+    
     args = parser.parse_args()
     exp = Path(os.environ["interactiveseg_processed"], args.task)
+    results = Path(os.environ["interactiveseg_results"], "mlruns")
 
-    from interactivenet.utils.utils import read_processed, read_metadata
     data = read_processed(exp)
     metadata = read_metadata(exp / "plans.json")
 
@@ -237,22 +183,23 @@ if __name__=="__main__":
         filename='{epoch:02d}-{val_loss:.2f}',
         mode='min'
     )
+    accelerator, devices, precision = check_gpu()
 
-    from interactivenet.utils.mlflow import mlflow_get_id
+    mlflow.set_tracking_uri(results)
     experiment_id = mlflow_get_id(args.task)
-
     mlflow.pytorch.autolog()
 
-    with mlflow.start_run(experiment_id=experiment_id, run_name=args.fold) as run:
+    with mlflow.start_run(experiment_id=experiment_id, run_name=str(args.fold)) as run:
         mlflow.set_tag('Mode', 'training')
         mlflow.log_param("fold", args.fold)
         artifact_path = Path(mlflow.get_artifact_uri().split('file://')[-1])
 
         network = Net(data, metadata, split=args.fold)
         trainer = pl.Trainer(
-            gpus=-1,
-            max_epochs=500,
-            precision=16,
+            accelerator=accelerator,
+            devices=devices,
+            max_epochs=args.epochs,
+            precision=precision,
             num_sanity_val_steps=1,
             log_every_n_steps=50,
             check_val_every_n_epoch=1,
@@ -262,3 +209,7 @@ if __name__=="__main__":
         )
         
         trainer.fit(network)
+
+if __name__=="__main__":
+    main()
+    

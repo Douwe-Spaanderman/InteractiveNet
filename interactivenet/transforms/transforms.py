@@ -12,6 +12,7 @@ from monai.transforms.transform import MapTransform, Transform
 from monai.transforms import NormalizeIntensity, GaussianSmooth, Flip
 import numpy as np
 import GeodisTK
+from interactivenet.utils.utils import to_pathlib
 from interactivenet.utils.resample import resample_image, resample_label, resample_interaction
 from interactivenet.utils.visualize import ImagePlot
 
@@ -149,71 +150,6 @@ class LoadWeightsd(MapTransform):
             d[f"{key}_meta_dict"] = d[f"{self.ref_image}_meta_dict"]
 
         return d
-
-class LoadPreprocessed(MapTransform):
-    """
-        This transform class takes NNUNet's preprocessing method for reference.
-        That code is in:
-        https://github.com/MIC-DKFZ/nnUNet/blob/master/nnunet/preprocessing/preprocessing.py
-    """
-
-    def __init__(
-        self,
-        keys,
-        new_keys,
-     ) -> None:
-        super().__init__(keys)
-        self.keys = keys
-        if len(self.keys) != 2:
-            raise ValueError(f"LoadPreprocessed data assumes the data has 2 keys with npz and metadata, this is not the case as there are {len(self.keys)} provided")
-
-        self.new_keys = new_keys
-        self.meta_keys = [x + "_meta_dict" for x in new_keys] + [x + "_transforms" for x in new_keys]
-
-    def read_pickle(self, filename):
-        with open(filename, 'rb') as handle:
-            b = pickle.load(handle)
-
-        return b
-
-    def __call__(self, data):
-        d = dict(data)
-        new_d = {}
-        for key in self.keys:
-            current_data = d[key]
-            if current_data.suffix == ".npz":
-                image_data = np.load(d[key])
-                old_keys = list(image_data.keys())
-                if not len(old_keys) == len(self.new_keys):
-                    raise KeyError("Old keys and new keys have not te same length in preprocessed data loader")
-
-                if set(old_keys) == set(self.new_keys):
-                    for new_key in self.new_keys:
-                        new_d[new_key] = image_data[new_key]
-
-                else:
-                    warnings.warn("old keys do not match new keys, however were the right length so just applying it in order")
-                    for old_key, new_key in zip(old_keys, self.new_keys):
-                        new_d[new_key] = image_data[old_key]
-
-            elif current_data.suffix == ".pkl":
-                metadata = self.read_pickle(d[key])
-                old_keys = list(metadata.keys())
-                if not len(old_keys) == len(self.meta_keys):
-                    raise KeyError("Old keys and new keys have not te same length in preprocessed data loader")
-
-                if set(old_keys) == set(self.meta_keys):
-                    for new_key in self.meta_keys:
-                        new_d[new_key] = metadata[new_key]
-
-                else:
-                    warnings.warn("old keys do not match new keys, however were the right length so just applying it in order")
-                    for old_key, new_key in zip(old_keys, self.meta_keys):
-                        new_d[new_key] = metadata[old_key]
-            else:
-                raise ValueError("Neither npz or pkl in preprocessed loader")
-
-        return new_d
 
 class AddDirectoryd(MapTransform):
     """
@@ -714,3 +650,96 @@ class EGDMapd(MapTransform):
 
         print(f"Geodesic Distance Map with lamd: {self.lamb}, iter: {self.iter} and logscale: {self.logscale}")
         return d
+
+class SavePreprocessed(MapTransform):
+    """
+        This transform class saves the preprocessed data to .npz and .pkl files
+    """
+    def __init__(
+        self,
+        keys: Union[str, List[str]],
+        save: Optional[Union[str, os.PathLike]]=None,
+    ) -> None:
+        super().__init__(keys)
+        self.keys = keys
+        self.meta_keys = [key + "_meta_dict" for key in self.keys]
+        self.save = to_pathlib(save)
+
+    def __call__(self, data):
+        d = dict(data)
+        name = data[f"{self.meta_keys[-1]}"]["filename_or_obj"].split("/")[-1].split(".nii.gz")[0]
+
+        np.savez(self.save / name, **{key :d[key] for key in self.keys})
+
+        pickle_data = {
+            key : d[key] for key in self.meta_keys
+        }
+
+        with open(self.save / (name + ".pkl"), 'wb') as handle:
+            pickle.dump(pickle_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        return d
+
+class LoadPreprocessed(MapTransform):
+    """
+        This transform class loads the preprocessed .npz and .pkl files
+    """
+
+    def __init__(
+        self,
+        keys:Union[str, List[str]],
+        new_keys:Union[str, List[str]],
+     ) -> None:
+        super().__init__(keys)
+        self.keys = keys
+        if len(self.keys) != 2:
+            raise ValueError(f"LoadPreprocessed data assumes the data has 2 keys with npz and metadata, this is not the case as there are {len(self.keys)} provided")
+
+        self.new_keys = new_keys
+        self.meta_keys = [x + "_meta_dict" for x in new_keys]
+
+    def read_pickle(self, filename:Optional[Union[str, os.PathLike]]):
+        with open(filename, 'rb') as handle:
+            b = pickle.load(handle)
+
+        return b
+
+    def __call__(self, data):
+        d = dict(data)
+        new_d = {}
+        for key in self.keys:
+            current_data = d[key]
+            if current_data.suffix == ".npz":
+                image_data = np.load(d[key])
+                old_keys = list(image_data.keys())
+                if not len(old_keys) == len(self.new_keys):
+                    raise KeyError("Old keys and new keys do not have the same length in preprocessed data loader")
+
+                if old_keys == self.new_keys:
+                    for new_key in self.new_keys:
+                        new_d[new_key] = image_data[new_key]
+
+                else:
+                    warnings.warn("old keys do not match new keys, however are the right length so just applying it in order")
+                    for old_key, new_key in zip(old_keys, self.new_keys):
+                        new_d[new_key] = image_data[old_key]
+
+            elif current_data.suffix == ".pkl":
+                metadata = self.read_pickle(d[key])
+                old_keys = list(metadata.keys())
+                
+                if not len(old_keys) == len(self.meta_keys):
+                    raise KeyError("Old keys and new keys do not have the same length in preprocessed data loader")
+
+                if old_keys == self.meta_keys:
+                    for new_key in self.meta_keys:
+                        new_d[new_key] = metadata[new_key]
+
+                else:
+                    warnings.warn("old keys do not match new keys, however are the right length so just applying it in order")
+                    for old_key, new_key in zip(old_keys, self.meta_keys):
+                        new_d[new_key] = metadata[old_key]
+            else:
+                raise ValueError("Neither npz or pkl in preprocessed loader")
+
+        return new_d

@@ -1,7 +1,8 @@
 from typing import Union, Dict
 
+import os
 import json
-from pathlib import Path, PosixPath
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -9,9 +10,8 @@ import torch
 import nibabel as nib
 import SimpleITK as sitk
 
-def read_dataset(datapath:Union[str, PosixPath], mode="train", error_message=None):
-    if isinstance(datapath, str):
-        datapath = Path(datapath)
+def read_dataset(datapath:Union[str, os.PathLike], mode="train", error_message=None):
+    datapath = to_pathlib(datapath)
 
     datapath = datapath / "dataset.json"
 
@@ -42,9 +42,8 @@ def read_nifti(data:Dict, test:bool=False):
 
     return loaded_data
 
-def read_processed(datapath:Union[str, PosixPath]):
-    if isinstance(datapath, str):
-        datapath = Path(datapath)
+def read_processed(datapath:Union[str, os.PathLike]):
+    datapath = to_pathlib(datapath)
 
     arrays = sorted([x for x in (datapath / "network_input").glob('**/*.npz') if x.is_file()])
     metafile = sorted([x for x in (datapath / "network_input").glob('**/*.pkl') if x.is_file()])
@@ -57,9 +56,8 @@ def read_processed(datapath:Union[str, PosixPath]):
             for npz_path, metafile_path in zip(arrays, metafile)
         ]
 
-def read_data(datapath:Union[str, PosixPath], test:bool=False):
-    if isinstance(datapath, str):
-        datapath = Path(datapath)
+def read_data(datapath:Union[str, os.PathLike], test:bool=False):
+    datapath = to_pathlib(datapath)
 
     images = sorted([x for x in (datapath / "imagesTs").glob('**/*') if x.is_file()])
     annotations = sorted([x for x in (datapath / "interactionTs").glob('**/*') if x.is_file()])
@@ -83,9 +81,8 @@ def read_data(datapath:Union[str, PosixPath], test:bool=False):
             for img_path, annot_path in zip(images, annotations)
         ]
 
-def read_metadata(metapath:Union[str, PosixPath], error_message=None):
-    if isinstance(metapath, str):
-        metapath = Path(metapath)
+def read_metadata(metapath:Union[str, os.PathLike], error_message=None):
+    metapath = to_pathlib(metapath)
 
     if metapath.is_file():
         with open(metapath) as f:
@@ -96,9 +93,8 @@ def read_metadata(metapath:Union[str, PosixPath], error_message=None):
         else:
             raise KeyError(f"metadata does not exist at path: {metapath}")
 
-def read_types(typespath:Union[str, PosixPath]):
-    if isinstance(typespath, str):
-        typespath = Path(typespath)
+def read_types(typespath:Union[str, os.PathLike]):
+    typespath = to_pathlib(typespath)
 
     if typespath.is_file():
         with open(typespath) as f:
@@ -130,3 +126,20 @@ def to_sitk(data:Union[np.ndarray, torch.Tensor], meta:Dict):
     data = sitk.GetImageFromArray(data, isVector=False)
     data.SetSpacing(np.array(meta["pixdim"][1:4], dtype='float32').tolist())
     return data
+
+def to_pathlib(datapath:Union[str, os.PathLike]):
+    if isinstance(datapath, str):
+        datapath = Path(datapath)
+    
+    return datapath
+
+def check_gpu():
+    if torch.cuda.is_available():
+        print("Using GPU!")
+        current_device = torch.cuda.current_device()
+        device_name = torch.cuda.get_device_name(current_device)
+        print(f"Now on device: {current_device} which is a {device_name}")
+        return "gpu", -1, 16
+    else:
+        print("YOU ARE CURRENTLY RUNNING WITHOUT GPU, THIS IS EXTREMELY SLOW!")
+        return "cpu", None, "bf16"
