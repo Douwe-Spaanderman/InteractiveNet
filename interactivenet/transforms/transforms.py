@@ -1,4 +1,4 @@
-from typing import Optional, Union, Dict, List
+from typing import Optional, Union, Dict, List, Tuple
 import os
 
 import warnings
@@ -120,54 +120,6 @@ class OriginalSize(Transform):
 
         return new_img
 
-class NormalizeValuesd(MapTransform):
-    """
-        This transform class takes NNUNet's preprocessing method for reference.
-        That code is in:
-        https://github.com/MIC-DKFZ/nnUNet/blob/master/nnunet/preprocessing/preprocessing.py
-    """
-
-    def __init__(
-        self,
-        keys,
-        clipping=[],
-        mean=0,
-        std=0,
-        nonzero=True,
-        channel_wise=True,
-    ) -> None:
-        super().__init__(keys)
-        self.keys = keys
-        self.nonzero = nonzero
-        self.channel_wise = channel_wise
-        self.clipping = clipping
-        self.mean = mean
-        self.std = std
-        self.normalize_intensity = NormalizeIntensity(nonzero=True, channel_wise=True)
-
-    def __call__(self, data):
-        d = dict(data)
-        data_type = None
-        keys = list(self.key_iterator(d))
-        for key in keys:
-            if data_type is None:
-                data_type = type(d[key])
-            elif not isinstance(d[key], data_type):
-                raise TypeError("All items in data must have the same type.")
-
-        for key in self.keys:
-            image = d[key]
-            if self.clipping:
-                d[f"{key}_EGD"] = (image - self.mean) / self.std
-                image = np.clip(image, self.clipping[0], self.clipping[1])
-                image = (image - self.mean) / self.std
-            else:
-                image = self.normalize_intensity(image.copy())
-
-            d[key] = image
-
-        return d
-
 class LoadWeightsd(MapTransform):
     """
         This transform class takes NNUNet's preprocessing method for reference.
@@ -195,276 +147,6 @@ class LoadWeightsd(MapTransform):
 
             d[key] = weights
             d[f"{key}_meta_dict"] = d[f"{self.ref_image}_meta_dict"]
-
-        return d
-
-class EGDMapd(MapTransform):
-    """
-        This transform class takes NNUNet's preprocessing method for reference.
-        That code is in:
-        https://github.com/MIC-DKFZ/nnUNet/blob/master/nnunet/preprocessing/preprocessing.py
-    """
-
-    def __init__(
-        self,
-        keys,
-        image,
-        lamb=1,
-        iter=4,
-        logscale=True,
-        ct=False,
-        backup=False,
-        powerof=False,
-    ) -> None:
-        super().__init__(keys)
-        self.keys = keys
-        self.image = image
-        self.lamb = lamb
-        self.iter = iter
-        self.logscale = logscale
-        self.backup = backup
-        self.ct = ct
-        self.powerof = powerof
-        self.gaussiansmooth = GaussianSmooth(sigma=1)
-
-    def __call__(self, data):
-        d = dict(data)
-        data_type = None
-        keys = list(self.key_iterator(d))
-        for key in keys:
-            if data_type is None:
-                data_type = type(d[key])
-            elif not isinstance(d[key], data_type):
-                raise TypeError("All items in data must have the same type.")
-
-        for key in self.keys:
-            if self.backup:
-                d[f"{key}_backup"] = d[key].copy()
-
-            if "new_spacing" in d[f'{self.image}_meta_dict'].keys():
-                spacing = d[f'{self.image}_meta_dict']["new_spacing"]
-            else:
-                spacing = np.asarray(d[f'{self.image}_meta_dict']["pixdim"][1:4])
-
-            if f"{self.image}_EGD" in d.keys():
-                image = d[f"{self.image}_EGD"]
-                del d[f'{self.image}_EGD']
-            else:
-                image = d[self.image]
-
-            if len(d[key].shape) == 4:
-                for idx in range(d[key].shape[0]):
-                    img = image[idx]
-
-                    GD = GeodisTK.geodesic3d_raster_scan(img.astype(np.float32), d[key][idx].astype(np.uint8), spacing.astype(np.float32), self.lamb, self.iter)
-                    if self.powerof:
-                        GD = GD**self.powerof
-
-                    if self.logscale == True:
-                        GD = np.exp(-GD)
-
-                    d[key][idx, :, :, :] = GD
-            else:
-
-                GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key].astype(np.uint8), spacing.astype(np.float32), self.lamb, self.iter)
-                if self.powerof:
-                    GD = GD**self.powerof
-
-                if self.logscale == True:
-                    GD = np.exp(-GD)
-
-                d[key] = GD
-
-        print(f"Geodesic Distance Map with lamd: {self.lamb}, iter: {self.iter} and logscale: {self.logscale}")
-        return d
-
-class BoudingBoxd(MapTransform):
-    """
-        This transform class takes NNUNet's preprocessing method for reference.
-        That code is in:
-        https://github.com/MIC-DKFZ/nnUNet/blob/master/nnunet/preprocessing/preprocessing.py
-    """
-
-    def __init__(
-        self,
-        keys,
-        on,
-        relaxation=0,
-        divisiblepadd=None,
-    ) -> None:
-        super().__init__(keys)
-        self.keys = keys
-        self.on = on
-
-        if isinstance(relaxation, float):
-            relaxation = [relaxation] * 3
-
-        if divisiblepadd:
-            if isinstance(divisiblepadd, int):
-                divisiblepadd = [divisiblepadd] * 3
-
-        self.relaxation = relaxation
-        self.divisiblepadd = divisiblepadd
-
-    def calculate_bbox(self, data):
-        inds_x, inds_y, inds_z = np.where(data > 0.5)
-
-        bbox = np.array([
-            [
-                np.min(inds_x),
-                np.min(inds_y),
-                np.min(inds_z)
-                ],
-            [
-                np.max(inds_x),
-                np.max(inds_y),
-                np.max(inds_z)
-            ]
-        ])
-
-        return bbox
-
-    def calculate_relaxtion(self, bbox_shape, anisotropic=False):
-        relaxation = [0] * len(bbox_shape)
-        for i, axis in enumerate(range(len(bbox_shape))):
-            relaxation[axis] = math.ceil(bbox_shape[axis] * self.relaxation[axis])
-
-            if anisotropic and i == 2: # This is only possible with Z on final axis
-                check = 3
-            else:
-                check = 8
-
-            if relaxation[axis] < check:
-                warnings.warn(f"relaxation was to small: {relaxation[axis]}, so adjusting it to {check}")
-                relaxation[axis] = check
-
-        return relaxation
-
-    def relax_bbox(self, data, bbox, relaxation):
-        bbox = np.array([
-            [
-                bbox[0][0] - relaxation[0],
-                bbox[0][1] - relaxation[1],
-                bbox[0][2] - relaxation[2]
-                ],
-            [
-                bbox[1][0] + relaxation[0],
-                bbox[1][1] + relaxation[1],
-                bbox[1][2] + relaxation[2],
-            ]
-        ])
-        for axis in range(len(bbox[0])):
-            if bbox[0,axis] == bbox[1,axis]:
-                bbox[0,axis] = bbox[0,axis] - 1
-                bbox[1,axis] = bbox[1,axis] + 1
-                warnings.warn(f"Bounding box has the same size in {axis} axis so extending axis by 1 both direction")
-
-        # Remove below zero and higher than shape because of relaxation
-        bbox[bbox < 0] = 0
-        largest_dimension = [int(x) if  x <= data.shape[i] else data.shape[i] for i, x in enumerate(bbox[1])]
-        bbox = np.array([bbox[0].tolist(), largest_dimension])
-
-        zeropadding = np.zeros(3)
-        if self.divisiblepadd:
-            for axis in range(len(self.divisiblepadd)):
-                expand = True
-                while expand == True:
-                    bbox_shape = np.subtract(bbox[1][axis],bbox[0][axis])
-                    residue = bbox_shape % self.divisiblepadd[axis]
-                    if residue != 0:
-                        residue = self.divisiblepadd[axis] - residue
-                        if residue < 2:
-                            neg = bbox[0][axis] - 1
-                            if neg >= 0:
-                                bbox[0][axis] = neg
-                            else:
-                                pos = bbox[1][axis] + 1
-                                if pos <= data.shape[axis]:
-                                    bbox[1][axis] = pos
-                                else:
-                                    zeropadding[axis] = zeropadding[axis] + residue
-                                    warnings.warn(f"bbox doesn't fit in the image for axis {axis}, adding zero padding {residue}")
-                                    expand = False
-                        else:
-                            neg = bbox[0][axis] - 1
-                            if neg >= 0:
-                                bbox[0][axis] = neg
-
-                            pos = bbox[1][axis] + 1
-                            if pos <= data.shape[axis]:
-                                bbox[1][axis] = pos
-
-                            if neg <= 0 and pos > data.shape[axis]:
-                                zeropadding[axis] = zeropadding[axis] + residue
-                                warnings.warn(f"bbox doesn't fit in the image for axis {axis}, adding zero padding {residue}")
-                                expand = False
-                    else:
-                        expand = False
-
-        padding = np.zeros((2,3), dtype=int)
-        if any(zeropadding > 0):
-            for idx, value in enumerate(zeropadding):
-                x = int(value / 2)
-                y = int(value - x)
-                padding[0][idx] = x
-                padding[1][idx] = y
-
-        return bbox, padding
-
-    def extract_bbox_region(self, data, bbox, padding):
-        new_region = data[
-                bbox[0][0]:bbox[1][0],
-                bbox[0][1]:bbox[1][1],
-                bbox[0][2]:bbox[1][2]
-                ]
-
-        new_region = np.pad(
-            new_region, (
-                (padding[0][0], padding[1][0]),
-                (padding[0][1], padding[1][1]),
-                (padding[0][2], padding[1][2])),
-            'constant')
-
-        return new_region
-
-    def __call__(self, data):
-        d = dict(data)
-        output = []
-        data_type = None
-        keys = list(self.key_iterator(d))
-        for key in keys:
-            if data_type is None:
-                data_type = type(d[key])
-            elif not isinstance(d[key], data_type):
-                raise TypeError("All items in data must have the same type.")
-            output.append(d[key])
-
-        bbox = self.calculate_bbox(d[self.on][0])
-        bbox_shape = np.subtract(bbox[1],bbox[0])
-        relaxation = self.calculate_relaxtion(bbox_shape, d[f"{key}_meta_dict"]["anisotrophy_flag"])
-
-        print(f"Original bouding box at location: {bbox[0]} and {bbox[1]} \t shape of bbox: {bbox_shape}")
-        final_bbox, zeropadding = self.relax_bbox(d[self.on][0], bbox, relaxation)
-        final_bbox_shape = np.subtract(final_bbox[1],final_bbox[0])
-        print(f"Bouding box at location: {final_bbox[0]} and {final_bbox[1]} \t bbox is relaxt with: {relaxation} \t and zero_padding: {zeropadding} \t and made divisible with: {self.divisiblepadd} \t shape after cropping: {final_bbox_shape}")
-        for key in self.keys:
-            if len(d[key].shape) == 4:
-                new_dkey = []
-                for idx in range(d[key].shape[0]):
-                    new_dkey.append(self.extract_bbox_region(d[key][idx], final_bbox, zeropadding))
-                d[key] = np.stack(new_dkey, axis=0)
-                final_size = d[key].shape[1:]
-            else:
-                d[key] = self.extract_bbox_region(d[key], final_bbox, zeropadding)
-                final_size = d[key].shape
-
-            d[f"{key}_meta_dict"]["bbox"] = bbox
-            d[f"{key}_meta_dict"]["bbox_shape"] = bbox_shape
-            d[f"{key}_meta_dict"]["bbox_relaxation"] = self.relaxation
-            d[f"{key}_meta_dict"]["final_bbox"] = final_bbox
-            d[f"{key}_meta_dict"]["final_bbox_shape"] = final_bbox_shape
-            d[f"{key}_meta_dict"]["zero_padding"] = zeropadding
-            d[f"{key}_meta_dict"]["final_size"] = final_size
 
         return d
 
@@ -534,6 +216,9 @@ class LoadPreprocessed(MapTransform):
         return new_d
 
 class AddDirectoryd(MapTransform):
+    """
+        This transform class appends the complete path to the objects in the dictionary.
+    """
     def __init__(
         self,
         keys=Union[str, List[str]],
@@ -565,9 +250,7 @@ class AddDirectoryd(MapTransform):
 
 class Visualized(MapTransform):
     """
-        This transform class takes NNUNet's preprocessing method for reference.
-        That code is in:
-        https://github.com/MIC-DKFZ/nnUNet/blob/master/nnunet/preprocessing/preprocessing.py
+        This transform class visualizes images at different timepoints of the interactivenet pipeline.
     """
 
     def __init__(
@@ -590,7 +273,6 @@ class Visualized(MapTransform):
         if len(self.keys) < 1:
             raise KeyError(f"Please provide both an image and mask, now only {self.keys} is provided")
 
-        import pdb; pdb.set_trace()
         d = dict(data)
         if self.interaction or self.distancemap:
             if len(self.keys) > 3:
@@ -629,9 +311,7 @@ class Visualized(MapTransform):
 
 class Resamplingd(MapTransform):
     """
-        This transform class takes NNUNet's preprocessing method for reference.
-        That code is in:
-        https://github.com/MIC-DKFZ/nnUNet/blob/master/nnunet/preprocessing/preprocessing.py
+        This transform class takes NNUNet's resampling method and applies it to our data structure.
     """
 
     def __init__(
@@ -738,4 +418,299 @@ class Resamplingd(MapTransform):
             d["label"] = label
             d["label_meta_dict"].update(new_meta)
 
+        return d
+
+
+class BoudingBoxd(MapTransform):
+    """
+        This transform class takes the bounding box of an object based on the mask or annotations.
+    """
+
+    def __init__(
+        self,
+        keys:Union[str, List[str]],
+        on:str,
+        relaxation:Union[float, Tuple[float]]=0,
+        divisiblepadd:Optional[Union[int, Tuple[int]]]=None,
+    ) -> None:
+        super().__init__(keys)
+        self.keys = keys
+        self.on = on
+
+        if isinstance(relaxation, float):
+            relaxation = [relaxation] * 3
+
+        if divisiblepadd:
+            if isinstance(divisiblepadd, int):
+                divisiblepadd = [divisiblepadd] * 3
+
+        self.relaxation = relaxation
+        self.divisiblepadd = divisiblepadd
+
+    def calculate_bbox(self, data:np.ndarray):
+        inds_x, inds_y, inds_z = np.where(data > 0.5)
+
+        bbox = np.array([
+            [
+                np.min(inds_x),
+                np.min(inds_y),
+                np.min(inds_z)
+                ],
+            [
+                np.max(inds_x),
+                np.max(inds_y),
+                np.max(inds_z)
+            ]
+        ])
+
+        return bbox
+
+    def calculate_relaxtion(self, bbox_shape:np.ndarray, anisotropic:bool=False):
+        relaxation = [0] * len(bbox_shape)
+        for i, axis in enumerate(range(len(bbox_shape))):
+            relaxation[axis] = math.ceil(bbox_shape[axis] * self.relaxation[axis])
+
+            if anisotropic and i == 2: # This is only possible with Z on final axis
+                check = 3
+            else:
+                check = 8
+
+            if relaxation[axis] < check:
+                warnings.warn(f"relaxation was to small: {relaxation[axis]}, so adjusting it to {check}")
+                relaxation[axis] = check
+
+        return relaxation
+
+    def relax_bbox(self, data:np.ndarray, bbox:np.ndarray, relaxation:List[int]):
+        bbox = np.array([
+            [
+                bbox[0][0] - relaxation[0],
+                bbox[0][1] - relaxation[1],
+                bbox[0][2] - relaxation[2]
+                ],
+            [
+                bbox[1][0] + relaxation[0],
+                bbox[1][1] + relaxation[1],
+                bbox[1][2] + relaxation[2],
+            ]
+        ])
+        for axis in range(len(bbox[0])):
+            if bbox[0,axis] == bbox[1,axis]:
+                bbox[0,axis] = bbox[0,axis] - 1
+                bbox[1,axis] = bbox[1,axis] + 1
+                warnings.warn(f"Bounding box has the same size in {axis} axis so extending axis by 1 both direction")
+
+        # Remove below zero and higher than shape because of relaxation
+        bbox[bbox < 0] = 0
+        largest_dimension = [int(x) if  x <= data.shape[i] else data.shape[i] for i, x in enumerate(bbox[1])]
+        bbox = np.array([bbox[0].tolist(), largest_dimension])
+
+        zeropadding = np.zeros(3)
+        if self.divisiblepadd:
+            for axis in range(len(self.divisiblepadd)):
+                expand = True
+                while expand == True:
+                    bbox_shape = np.subtract(bbox[1][axis],bbox[0][axis])
+                    residue = bbox_shape % self.divisiblepadd[axis]
+                    if residue != 0:
+                        residue = self.divisiblepadd[axis] - residue
+                        if residue < 2:
+                            neg = bbox[0][axis] - 1
+                            if neg >= 0:
+                                bbox[0][axis] = neg
+                            else:
+                                pos = bbox[1][axis] + 1
+                                if pos <= data.shape[axis]:
+                                    bbox[1][axis] = pos
+                                else:
+                                    zeropadding[axis] = zeropadding[axis] + residue
+                                    warnings.warn(f"bbox doesn't fit in the image for axis {axis}, adding zero padding {residue}")
+                                    expand = False
+                        else:
+                            neg = bbox[0][axis] - 1
+                            if neg >= 0:
+                                bbox[0][axis] = neg
+
+                            pos = bbox[1][axis] + 1
+                            if pos <= data.shape[axis]:
+                                bbox[1][axis] = pos
+
+                            if neg <= 0 and pos > data.shape[axis]:
+                                zeropadding[axis] = zeropadding[axis] + residue
+                                warnings.warn(f"bbox doesn't fit in the image for axis {axis}, adding zero padding {residue}")
+                                expand = False
+                    else:
+                        expand = False
+
+        padding = np.zeros((2,3), dtype=int)
+        if any(zeropadding > 0):
+            for idx, value in enumerate(zeropadding):
+                x = int(value / 2)
+                y = int(value - x)
+                padding[0][idx] = x
+                padding[1][idx] = y
+
+        return bbox, padding
+
+    def extract_bbox_region(self, data:np.ndarray, bbox:np.ndarray, padding:np.ndarray):
+        new_region = data[
+                bbox[0][0]:bbox[1][0],
+                bbox[0][1]:bbox[1][1],
+                bbox[0][2]:bbox[1][2]
+                ]
+
+        new_region = np.pad(
+            new_region, (
+                (padding[0][0], padding[1][0]),
+                (padding[0][1], padding[1][1]),
+                (padding[0][2], padding[1][2])),
+            'constant')
+
+        return new_region
+
+    def __call__(self, data):
+        d = dict(data)
+        data_type = None
+        keys = list(self.key_iterator(d))
+
+        bbox = self.calculate_bbox(d[self.on][0])
+        bbox_shape = np.subtract(bbox[1],bbox[0])
+        relaxation = self.calculate_relaxtion(bbox_shape, d["image_meta_dict"]["anisotrophy_flag"])
+
+        print(f"Original bouding box at location: {bbox[0]} and {bbox[1]} \t shape of bbox: {bbox_shape}")
+        final_bbox, zeropadding = self.relax_bbox(d[self.on][0], bbox, relaxation)
+        final_bbox_shape = np.subtract(final_bbox[1],final_bbox[0])
+        print(f"Bouding box at location: {final_bbox[0]} and {final_bbox[1]} \t bbox is relaxt with: {relaxation} \t and zero_padding: {zeropadding} \t and made divisible with: {self.divisiblepadd} \t shape after cropping: {final_bbox_shape}")
+        for key in self.keys:
+            if len(d[key].shape) == 4:
+                new_dkey = []
+                for idx in range(d[key].shape[0]):
+                    new_dkey.append(self.extract_bbox_region(d[key][idx], final_bbox, zeropadding))
+                d[key] = np.stack(new_dkey, axis=0)
+                final_size = d[key].shape[1:]
+            else:
+                d[key] = self.extract_bbox_region(d[key], final_bbox, zeropadding)
+                final_size = d[key].shape
+
+            d[f"{key}_meta_dict"]["bbox"] = bbox
+            d[f"{key}_meta_dict"]["bbox_shape"] = bbox_shape
+            d[f"{key}_meta_dict"]["bbox_relaxation"] = self.relaxation
+            d[f"{key}_meta_dict"]["final_bbox"] = final_bbox
+            d[f"{key}_meta_dict"]["final_bbox_shape"] = final_bbox_shape
+            d[f"{key}_meta_dict"]["zero_padding"] = zeropadding
+            d[f"{key}_meta_dict"]["final_size"] = final_size
+
+        return d
+
+class NormalizeValuesd(MapTransform):
+    """
+        This transform class takes NNUNet's normalization method and applies it to our data structure.
+    """
+
+    def __init__(
+        self,
+        keys:Union[str, List[str]],
+        clipping:List[float]=[],
+        mean:float=0,
+        std:float=0,
+        nonzero:bool=True,
+        channel_wise:bool=True,
+    ) -> None:
+        super().__init__(keys)
+        self.keys = keys
+        self.nonzero = nonzero
+        self.channel_wise = channel_wise
+        self.clipping = clipping
+        self.mean = mean
+        self.std = std
+        self.normalize_intensity = NormalizeIntensity(nonzero=True, channel_wise=True)
+
+    def __call__(self, data):
+        d = dict(data)
+
+        for key in self.keys:
+            image = d[key]
+            if self.clipping:
+                d[f"{key}_EGD"] = (image - self.mean) / self.std
+                image = np.clip(image, self.clipping[0], self.clipping[1])
+                image = (image - self.mean) / self.std
+            else:
+                image = self.normalize_intensity(image.copy())
+
+            d[key] = image
+
+        return d
+
+
+class EGDMapd(MapTransform):
+    """
+        This transform class creates an exponetialized geodesic distance map, based on an image and annotations.
+        For more information you can look into:
+        https://github.com/taigw/GeodisTK
+    """
+
+    def __init__(
+        self,
+        keys:Union[str, List[str]],
+        image:str,
+        lamb:int=1,
+        iter:int=4,
+        logscale:bool=True,
+        ct:bool=False,
+        backup:bool=False,
+        powerof:bool=False,
+    ) -> None:
+        super().__init__(keys)
+        self.keys = keys
+        self.image = image
+        self.lamb = lamb
+        self.iter = iter
+        self.logscale = logscale
+        self.backup = backup
+        self.ct = ct
+        self.powerof = powerof
+        self.gaussiansmooth = GaussianSmooth(sigma=1)
+
+    def __call__(self, data):
+        d = dict(data)
+
+        for key in self.keys:
+            if self.backup:
+                d[f"{key}_backup"] = d[key].copy()
+
+            if "new_spacing" in d[f'{self.image}_meta_dict'].keys():
+                spacing = d[f'{self.image}_meta_dict']["new_spacing"]
+            else:
+                spacing = np.asarray(d[f'{self.image}_meta_dict']["pixdim"][1:4])
+
+            if f"{self.image}_EGD" in d.keys():
+                image = d[f"{self.image}_EGD"]
+                del d[f'{self.image}_EGD']
+            else:
+                image = d[self.image]
+
+            if len(d[key].shape) == 4:
+                for idx in range(d[key].shape[0]):
+                    img = image[idx]
+
+                    GD = GeodisTK.geodesic3d_raster_scan(img.astype(np.float32), d[key][idx].astype(np.uint8), spacing.astype(np.float32), self.lamb, self.iter)
+                    if self.powerof:
+                        GD = GD**self.powerof
+
+                    if self.logscale == True:
+                        GD = np.exp(-GD)
+
+                    d[key][idx, :, :, :] = GD
+            else:
+
+                GD = GeodisTK.geodesic3d_raster_scan(image.astype(np.float32), d[key].astype(np.uint8), spacing.astype(np.float32), self.lamb, self.iter)
+                if self.powerof:
+                    GD = GD**self.powerof
+
+                if self.logscale == True:
+                    GD = np.exp(-GD)
+
+                d[key] = GD
+
+        print(f"Geodesic Distance Map with lamd: {self.lamb}, iter: {self.iter} and logscale: {self.logscale}")
         return d

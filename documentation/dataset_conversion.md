@@ -26,7 +26,7 @@ imagesTr contain the images for the training samples. Based on these images, Int
 
 Each sample should have an unique identifier, so the images, interactions and labels can be matched. **All files should be 3D nifti files (.nii.gz)**. The image can have any scalar pixel type. Label should contain only 0 or 1 integers, where 0 is considered background. Currenlty, multiple labels, e.g. 1 tumor and 2 edema is not supported. Interactions should also only contain 0 or 1 integers, where 1 represents the interior margin points. As images can have multiple modalities, we specifiy these by an extra suffix of four digits at the end of the filename.
 
-Here is an example of the first task of the MSD: BrainTumor. In which each image has four modalities (0000), T1w (0001), T1gd (0002) and T2w (0003):
+Here is an example of the first task of the MSD: BrainTumor. In which each image has four modalities: FLAIR (0000), T1w (0001), T1gd (0002) and T2w (0003):
 
     InteractiveNet/raw/Task001_BrainTumour
     ├── imagesTr
@@ -91,3 +91,26 @@ Here is an example of the first task of the MSD: BrainTumor. In which each image
         ├── ...
 
 Note that imagesTs, interactionsTs, and labelsTs are optional and not required for configuring InteractiveNet.
+
+## Dataset metadata file
+
+You need to create a metadata file for each Task, which can be done using: **provided that your data is in the above structure**
+```
+interactivenet_generate_dataset_json -t TaskXXX_YOURTASK -m modality1 modality2 modality3 -l background label1 label2
+```
+
+In this example, we have 3 modalities (_0000, _0001, _0002) and 2 labels (1, 2). Note that background does not need to be provide, e.g. ```-l label1 label2``` also works. Ofcourse a singular modality or label is also possible, e.g. ```-m modality1 -l label1```.
+
+**The following does not apply for most experiments:**
+In my own experiments, I use subtypes in addition to labels, as sometimes I want the model to predict all segmentations as label1, but I want to seperate subtypes of tumors for stratification and downstream analysis. Note, that this way the model does not learn to differentiate between different classes, e.g. two tumor types (lipoma and atypical lipomatous tumors) are both considered tumors (label: 1), however are represented in the dataset as two classes. This can be achieved by providing a file named ```subtypes.json``` with the following format:
+
+```
+{
+    "sample001" : "subtype1",
+    "sample002" : "subtype2",
+    ...
+    "sample104" : "subtype2"
+}
+```
+
+And adding ```-type``` to ```interactivenet_generate_dataset_json```.

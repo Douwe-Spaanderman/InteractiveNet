@@ -30,7 +30,7 @@ setup(
             'interactivenet_generate_dataset_json=interactivenet.experiment_planning.generate_dataset_json:main',
             'interactivenet_fingerprinting=interactivenet.experiment_planning.fingerprinting:main',
             'interactivenet_plan_and_process=interactivenet.experiment_planning.plan_and_process:main',
-            'interactivenet_preprocessing=interactivenet.preprocessing.preprocessing:main'
+            'interactivenet_preprocessing=interactivenet.experiment_planning.preprocessing:main'
             ]
     },
     keywords=[

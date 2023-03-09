@@ -469,9 +469,9 @@ def main():
     raw_path = Path(os.environ["interactiveseg_raw"], args.task)
     data, modalities = read_dataset(raw_path)
 
-    fingerpint = FingerPrint(
-        data=data,
+    fingerprint = FingerPrint(
         task=args.task,
+        data=data,
         modalities=modalities,
         relax_bbox=args.relax_bbox,
         seed=seed,
@@ -479,7 +479,7 @@ def main():
         stratified=args.stratified,
         leave_one_out=args.leave_one_out,
     )
-    fingerpint()
+    fingerprint()
 
 
 if __name__ == "__main__":

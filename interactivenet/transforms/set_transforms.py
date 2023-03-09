@@ -1,104 +1,100 @@
+import os
+from typing import List, Tuple, Dict, Sequence, Optional, Callable, Union
+
 from monai.transforms import (
     Compose,
     LoadImaged,
     EnsureChannelFirstd,
-    NormalizeIntensityd,
-    DivisiblePadd,
+    DivisiblePadd
 )
 
-class GenericTransform(object):
-    def __init__(self) -> None:
-        self.transform = []
+from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd, Visualized, NormalizeValuesd, AddDirectoryd
 
-    def compose(self):
-        self.transform = Compose(
-            self.transform
-        )
-
-class NIFTITransform(GenericTransform):
-    def __init__(self) -> None:
-        super().__init__()
-        print(self.transform)
-
-class NUMPYTransform(GenericTransform):
-    def __init__(self) -> None:
-        super().__init__()
-        print('no')
-
-class PreProcessTransform(NIFTITransform):
-    def __init__(
-        self, 
+def processing_transforms(
         target_spacing: Tuple[float],
-        relaxed_bbox: Tuple[float] = (10, 10, 2),
-        divisble_using: int = 16,
-        ) -> None:
-        super().__init__()
+        processed_path: Union[str, os.PathLike],
+        raw_path: Optional[Union[str, os.PathLike]] = None,
+        relax_bbox: Union[float, Tuple[float]] = 0.1,
+        divisble_using: Union[int, Tuple[int]] = (16, 16, 8),
+        clipping: List[float] = [],
+        intensity_mean: float = 0,
+        intensity_std: float = 0,
+        ct: bool = False,
+        verbose: bool = False,
+        compose: bool = True,
+    ):
 
-        self.transform.append(
-            Resamplingd(
-                keys=["image", "annotation", "mask"],
-                pixdim=target_spacing,
-                ),
-            BoudingBoxd(
-                keys=["image", "annotation", "mask"],
-                on="mask",
-                relaxation=relaxed_bbox,
-                ),
-            NormalizeIntensityd(
-                keys=["image"],
-                nonzero=True,
-                channel_wise=False,
-                ),
-            EGDMapd(
-                keys=["annotation"],
-                image="image",
-                lamb=1,
-                iter=4,
-                ),
-            DivisiblePadd(
-                keys=["image", "annotation", "mask"],
-                k=divisble_using
-                ),
+    transforms = [
+        AddDirectoryd(keys=["image", "interaction", "label"], directory=raw_path, convert_to_pathlib=True),
+        LoadImaged(keys=["image", "interaction", "label"]),
+        EnsureChannelFirstd(keys=["image", "interaction", "label"]),
+    ]
+
+    if verbose:
+        transforms += [
+            Visualized(
+                keys=["image", "interaction", "label"],
+                save=processed_path / 'verbose' / 'raw',
+                interaction=True,
+                CT=ct
+            ),
+        ]
+    
+    transforms += [
+        Resamplingd(
+            keys=["image", "interaction", "label"],
+            pixdim=target_spacing,
+        ),
+        BoudingBoxd(
+            keys=["image", "interaction", "label"],
+            on="label",
+            relaxation=relax_bbox,
+            divisiblepadd=divisble_using,
+        ),
+        NormalizeValuesd(
+            keys=["image"],
+            clipping=clipping,
+            mean=intensity_mean,
+            std=intensity_std,
+        ),
+    ]
+
+    if verbose:
+        transforms += [
+            Visualized(
+                keys=["image", "interaction", "label"],
+                save=processed_path / 'verbose' / 'processed',
+                interaction=True,
+                CT=ct
+            ),
+        ]
+    
+    transforms += [
+        EGDMapd(
+            keys=["interaction"],
+            image="image",
+            lamb=1,
+            iter=4,
+            logscale=True,
+            ct=ct
+        ),
+        DivisiblePadd(
+            keys=["image", "interaction", "label"],
+            k=divisble_using
+        ),
+    ]
+
+    if verbose:
+        transforms += [
+            Visualized(
+                keys=["interaction", "label"],
+                save=processed_path / 'verbose' / 'map',
+                distancemap=True,
+                CT=ct
             )
+        ]
 
-class TrainingTransform(GenericTransform):
-    def __init__(self):
-        super().__init__()
-        print('no')
-
-NIFTITransform()
-
-# self.transforms = Compose(
-#     [
-#     LoadImaged(
-#         keys=["image", "annotation", "mask"]
-#         ),
-#     EnsureChannelFirstd(
-#         keys=["image", "annotation", "mask"]
-#         ),
-#     Resamplingd(
-#         keys=["image", "annotation", "mask"],
-#         pixdim=target_spacing,
-#         ),
-#     BoudingBoxd(
-#         keys=["image", "annotation", "mask"],
-#         on="mask",
-#         relaxation=relaxed_bbox,
-#         ),
-#     NormalizeIntensityd(
-#         keys=["image"],
-#         nonzero=True,
-#         channel_wise=False,
-#         ),
-#     EGDMapd(
-#         keys=["annotation"],
-#         image="image",
-#         lamb=1,
-#         iter=4,
-#         ),
-#     DivisiblePadd(
-#         keys=["image", "annotation", "mask"],
-#         k=divisble_using
-#         ),
-#     ]
-# )
+    if compose:
+        return Compose(transforms)
+    else:
+        return transforms

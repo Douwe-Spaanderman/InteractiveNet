@@ -8,15 +8,9 @@ import os
 import argparse
 
 from monai.data import Dataset as MonaiDataset
-from monai.transforms import (
-    Compose,
-    LoadImaged,
-    EnsureChannelFirstd,
-    DivisiblePadd
-)
 
-from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd, Visualized, NormalizeValuesd, AddDirectoryd
 from interactivenet.utils.utils import read_dataset
+from interactivenet.transforms.set_transforms import processing_transforms
 
 class Preprocessing(MonaiDataset):
     def __init__(
@@ -30,6 +24,7 @@ class Preprocessing(MonaiDataset):
         intensity_mean: float = 0,
         intensity_std: float = 0,
         ct: bool = False,
+        verbose: bool = False,
     ) -> None:
         print("Initializing Preprocessing")
         self.task = task
@@ -38,65 +33,27 @@ class Preprocessing(MonaiDataset):
         self.create_directories()
         
         self.data = data
+        self.target_spacing = target_spacing
         self.relax_bbox = relax_bbox
         self.divisble_using = divisble_using
         self.clipping = clipping
         self.intensity_mean = intensity_mean
         self.intensity_std = intensity_std
         self.ct = ct
-        self.transforms = Compose(
-            [
-                AddDirectoryd(keys=["image", "interaction", "label"], directory=self.raw_path, convert_to_pathlib=True),
-                LoadImaged(keys=["image", "interaction", "label"]),
-                EnsureChannelFirstd(keys=["image", "interaction", "label"]),
-                Visualized(
-                    keys=["image", "interaction", "label"],
-                    save=self.processed_path / 'verbose' / 'raw',
-                    interaction=True,
-                    CT=self.ct
-                ),
-                Resamplingd(
-                    keys=["image", "interaction", "label"],
-                    pixdim=target_spacing,
-                ),
-                BoudingBoxd(
-                    keys=["image", "interaction", "label"],
-                    on="label",
-                    relaxation=self.relax_bbox,
-                    divisiblepadd=self.divisble_using,
-                ),
-                NormalizeValuesd(
-                    keys=["image"],
-                    clipping=self.clipping,
-                    mean=self.intensity_mean,
-                    std=self.intensity_std,
-                ),
-                Visualized(
-                    keys=["image", "interaction", "label"],
-                    save=self.processed_path / 'verbose' / 'processed',
-                    interaction=True,
-                    CT=self.ct
-                ),
-                EGDMapd(
-                    keys=["interaction"],
-                    image="image",
-                    lamb=1,
-                    iter=4,
-                    logscale=True,
-                    ct=self.ct
-                ),
-                DivisiblePadd(
-                    keys=["image", "interaction", "label"],
-                    k=self.divisble_using
-                ),
-                Visualized(
-                    keys=["interaction", "label"],
-                    save=self.processed_path / 'verbose' / 'Map',
-                    distancemap=True,
-                    CT=self.ct
-                ),
-                ]
+        self.verbose = verbose
+        self.transforms = processing_transforms(
+            target_spacing = self.target_spacing,
+            processed_path = self.processed_path,
+            raw_path = self.raw_path,
+            relax_bbox = self.relax_bbox,
+            divisble_using = self.divisble_using,
+            clipping = self.clipping,
+            intensity_mean = self.intensity_mean,
+            intensity_std = self.intensity_std,
+            ct = self.ct,
+            verbose = self.verbose,
         )
+
         super().__init__(self.data, self.transforms)
 
     def __call__(self) -> None:
@@ -156,6 +113,13 @@ class Preprocessing(MonaiDataset):
 def main():
     parser = argparse.ArgumentParser(description="InteractiveNet Processing")
     parser.add_argument("-t", "--task", required=True, type=str, help="Task name")
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Do you want to run verbose and generate images?",
+    )
     args = parser.parse_args()
 
     raw_path = Path(os.environ["interactiveseg_raw"], args.task)
@@ -178,6 +142,7 @@ def main():
         intensity_mean=plans["Fingerprint"]["Intensity_mean"],
         intensity_std=plans["Fingerprint"]["Intensity_std"],
         ct=plans["Fingerprint"]["CT"],
+        verbose=args.verbose,
     )
     preprocess()
 

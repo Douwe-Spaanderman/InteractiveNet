@@ -39,19 +39,24 @@ We recommend installing InteractiveNet in a [virtual environment](https://docs.p
 3. InteractiveNet needs to know where you intent to save raw data, processed data and results. Follow [these](documentation/env_variables.md) instructions to set up environment paths.
 
 # Usage
+Interactivenet installs several new commands to your terminal, which are used to run the interactivenet pipeline. All commands have the prefix ```interactivenet_```. All commands have a ```-h``` of ```--help``` option to give you more information on how to use them.
 
 ## Running on a new dataset
 Using InteractiveNet requires you to structure your dataset in a format closely following the data structure of [Medical Segmentation Decthlon](http://medicaldecathlon.com/). How to convert your dataset to be compatible with InteractiveNet can be found [here](documentation/dataset_conversion.md). Also, for InteractiveNet interior margin points are required, if it is not possible to create these interactions manual, we provide options to derive these interactions
 [synthetically](documentation/synthetic_interactions.md)
 
 ### Fingerprinting and preprocessing
-InteractiveNet uses fingerprinting of the dataset to determine the best strategy for preprocessing and determines best network configurations. you can run the preprocessing by:
+InteractiveNet uses fingerprinting of the dataset to determine the best strategy for preprocessing and determines best network configurations. you can run fingerprinting, experiment planning and processing in one go using:
 
 ```
-
+interactivenet_plan_and_process -t TaskXXX_YOURTASK
 ```
 
+This command creates and populates the interactivenet_processed/TaskXXX_MYTASK folder, with plans on experiment running, and preprocessed .npz and .pkl files for your data. This is done so training is significantly faster. Finally, using ```-v``` or ```--verbose``` with the above command will create snapshots of all the images at different timepoints of the processing pipeline. More specifically, it will create images from: raw data, the exponentialized geodesic map, and final processed data.
 
+Using ```-h``` or ```--help``` for planning and processing gives you multiple options to adjust settings in the experiment. One option I would advise to use is setting the ```-s``` or ```--seed``` to a set value. This will make sure that you will be able to replicate your experiments. If you forgot to do this, don't worry the randomly generated seed is stored in plans.json file.
+
+Note, that together, depending on how powerful your CPU is, running planning and preprocessing might take up to half an hour.
 
 ### Training
 
