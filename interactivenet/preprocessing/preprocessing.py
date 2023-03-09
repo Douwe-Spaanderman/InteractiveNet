@@ -15,7 +15,7 @@ from monai.transforms import (
     DivisiblePadd
 )
 
-from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd, Visualized, NormalizeValuesd
+from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd, Visualized, NormalizeValuesd, AddDirectoryd
 from interactivenet.utils.utils import read_dataset
 
 class Preprocessing(MonaiDataset):
@@ -46,13 +46,14 @@ class Preprocessing(MonaiDataset):
         self.ct = ct
         self.transforms = Compose(
             [
-                # ADD PATH
+                AddDirectoryd(keys=["image", "interaction", "label"], directory=self.raw_path, convert_to_pathlib=True),
                 LoadImaged(keys=["image", "interaction", "label"]),
                 EnsureChannelFirstd(keys=["image", "interaction", "label"]),
                 Visualized(
                     keys=["image", "interaction", "label"],
                     save=self.processed_path / 'verbose' / 'raw',
-                    interaction=True
+                    interaction=True,
+                    CT=self.ct
                 ),
                 Resamplingd(
                     keys=["image", "interaction", "label"],
@@ -73,7 +74,8 @@ class Preprocessing(MonaiDataset):
                 Visualized(
                     keys=["image", "interaction", "label"],
                     save=self.processed_path / 'verbose' / 'processed',
-                    interaction=True
+                    interaction=True,
+                    CT=self.ct
                 ),
                 EGDMapd(
                     keys=["interaction"],
@@ -91,6 +93,7 @@ class Preprocessing(MonaiDataset):
                     keys=["interaction", "label"],
                     save=self.processed_path / 'verbose' / 'Map',
                     distancemap=True,
+                    CT=self.ct
                 ),
                 ]
         )
@@ -100,7 +103,7 @@ class Preprocessing(MonaiDataset):
         print("\nPreprocessing:\n")
         metainfo = {}
         for i, item in enumerate(self.data):
-            name = item["label"].with_suffix('').stem
+            name = Path(item["label"]).with_suffix('').stem
             print(f"File: {name}")
             item = self.__getitem__(i)
 

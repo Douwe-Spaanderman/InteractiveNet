@@ -1,4 +1,5 @@
-from typing import Union, Dict
+from typing import Optional, Union, Dict, List
+import os
 
 import warnings
 import pickle
@@ -11,12 +12,12 @@ from monai.transforms.transform import MapTransform, Transform
 from monai.transforms import NormalizeIntensity, GaussianSmooth, Flip
 import numpy as np
 import GeodisTK
-from interactivenet.utils.resample import resample_image, resample_label, resample_annotation
+from interactivenet.utils.resample import resample_image, resample_label, resample_interaction
 from interactivenet.utils.visualize import ImagePlot
 
 class TestTimeFlipping(Transform):
     """
-        This transform class takes list of annotations to array.
+        This transform class takes list of interactions to array.
         That code is in:
     """
 
@@ -119,69 +120,6 @@ class OriginalSize(Transform):
 
         return new_img
 
-class Visualized(MapTransform):
-    """
-        This transform class takes NNUNet's preprocessing method for reference.
-        That code is in:
-        https://github.com/MIC-DKFZ/nnUNet/blob/master/nnunet/preprocessing/preprocessing.py
-    """
-
-    def __init__(
-        self,
-        keys,
-        interaction=None,
-        distancemap=False,
-        CT=False,
-        save=None,
-    ) -> None:
-        super().__init__(keys)
-        self.keys = keys
-        self.annotation = annotation
-        self.additional = None
-        self.distancemap = distancemap
-        self.CT = CT
-        self.save = save
-
-    def __call__(self, data):
-        if len(self.keys) < 1:
-            raise KeyError(f"Please provide both an image and mask, now only {self.keys} is provided")
-
-        d = dict(data)
-        if self.annotation or self.distancemap:
-            if len(self.keys) > 3:
-                self.additional = self.keys[3:]
-                self.additional = [d[f'{x}'] for x in self.additional]
-
-            if self.distancemap:
-                image, label = self.keys[:2]
-                if self.annotation:
-                    annotation = [d[f'{annotation}_backup']]
-                else:
-                    annotation = None
-            else:
-                image, annotation, label = self.keys[:3]
-                annotation = [d[f"{annotation}"]]
-
-        else:
-            if len(self.keys) > 2:
-                self.additional = self.keys[2:]
-                self.additional = [d[x] for x in self.additional]
-
-            image, label = self.keys[:2]
-            annotation = None
-
-        if self.save:
-            save = self.save / Path(d[f'{label}_meta_dict']["filename_or_obj"]).name.split('.')[0]
-        else:
-            save = None
-
-        image = d[f'{image}']
-        label = d[f'{label}']
-
-        ImagePlot(image, label, annotation=annotation, additional_scans=self.additional, CT=self.CT, save=save, show=False)
-
-        return d
-
 class NormalizeValuesd(MapTransform):
     """
         This transform class takes NNUNet's preprocessing method for reference.
@@ -227,139 +165,6 @@ class NormalizeValuesd(MapTransform):
                 image = self.normalize_intensity(image.copy())
 
             d[key] = image
-
-        return d
-
-class Resamplingd(MapTransform):
-    """
-        This transform class takes NNUNet's preprocessing method for reference.
-        That code is in:
-        https://github.com/MIC-DKFZ/nnUNet/blob/master/nnunet/preprocessing/preprocessing.py
-    """
-
-    def __init__(
-        self,
-        keys,
-        pixdim,
-    ) -> None:
-        super().__init__(keys)
-        self.keys = keys
-        self.target_spacing = pixdim
-
-    def calculate_new_shape(self, spacing_ratio, shape):
-        new_shape = (spacing_ratio * np.array(shape)).astype(int).tolist()
-        return new_shape
-
-    def check_anisotrophy(self, spacing):
-        def check(spacing):
-            return np.max(spacing) / np.min(spacing) >= 3
-
-        return check(spacing) or check(self.target_spacing)
-
-    def sanity_in_mask(self, annotation, label):
-        sanity = []
-        for i, annotation_d in enumerate(annotation):
-            label_d = label[i]
-            idx_x, idx_y, idx_z = np.where(annotation_d > 0.5)
-            sanity_d = []
-            for x, y, z in zip(idx_x, idx_y, idx_z):
-                sanity_d.append(label_d[x, y, z] == 1)
-
-            sanity.append(not any(sanity_d))
-
-        return not any(sanity)
-
-    def __call__(self, data):
-        if len(self.keys) == 3:
-            image, annotation, label = self.keys
-            nimg, npnt, nseg = image, annotation, label
-        elif len(self.keys) == 2:
-            image, annotation = self.keys
-            nimg, npnt = image, annotation
-        else:
-            image = self.keys
-            name = image
-
-        d = dict(data)
-        image = d[image]
-        image_spacings = d[f"{nimg}_meta_dict"]["pixdim"][1:4].tolist()
-        print(f"Original Spacing: {image_spacings} \t Target Spacing: {self.target_spacing}")
-
-        if "annotation" in self.keys:
-            annotation = d["annotation"]
-            annotation[annotation < 0] = 0
-        elif "point" in self.keys:
-            annotation = d["point"]
-            annotation[annotation < 0] = 0
-
-        if "label" in self.keys:
-            label = d["label"]
-            label[label < 0] = 0
-        elif "seg" in self.keys:
-            label = d["seg"]
-            label[label < 0] = 0
-        elif "mask" in self.keys:
-            label = d["mask"]
-            label[label < 0] = 0
-
-        # calculate shape
-        original_shape = image.shape[1:]
-        resample_flag = False
-        anisotrophy_flag = False
-
-        if self.target_spacing != image_spacings:
-            # resample
-            resample_flag = True
-            spacing_ratio = np.array(image_spacings) / np.array(self.target_spacing)
-            resample_shape = self.calculate_new_shape(spacing_ratio, original_shape)
-            print(f"Original Shape: {original_shape} \t Target Shape: {resample_shape}")
-            anisotrophy_flag = self.check_anisotrophy(image_spacings)
-            image = resample_image(image, resample_shape, anisotrophy_flag)
-
-            if "label" in self.keys or "seg" in self.keys or "mask" in self.keys:
-                label = resample_label(label, resample_shape, anisotrophy_flag)
-
-            if "annotation" in self.keys:
-                annotation = resample_annotation(d["annotation"], d['annotation_meta_dict']["affine"], self.target_spacing, resample_shape)
-                if "label" in self.keys or "seg" in self.keys or "mask" in self.keys:
-                    d["annotation_meta_dict"]["in_mask"] = self.sanity_in_mask(annotation, label)
-                    if d['annotation_meta_dict']["in_mask"] == False:
-                        warnings.warn("Annotations are outside of the mask, please fix this")
-            elif "point" in self.keys:
-                annotation = resample_annotation(d["point"], d['point_meta_dict']["affine"], self.target_spacing, resample_shape)
-                if "label" in self.keys or "seg" in self.keys or "mask" in self.keys:
-                    d['point_meta_dict']["in_mask"] = self.sanity_in_mask(annotation, label)
-                    if d['point_meta_dict']["in_mask"] == False:
-                        warnings.warn("Annotations are outside of the mask, please fix this")
-
-        new_meta = {
-            "org_spacing": np.array(image_spacings),
-            "org_dim": np.array(original_shape),
-            "new_spacing": np.array(self.target_spacing),
-            "new_dim": np.array(resample_shape),
-            "resample_flag": resample_flag,
-            "anisotrophy_flag": anisotrophy_flag,
-        }
-
-        d[f"{nimg}"] = image
-        d[f"{nimg}_meta_dict"].update(new_meta)
-
-        if "annotation" in self.keys:
-            d["annotation"] = annotation
-            d["annotation_meta_dict"].update(new_meta)
-        elif "point" in self.keys:
-            d["point"] = annotation
-            d["point_meta_dict"].update(new_meta)
-
-        if "label" in self.keys:
-            d["label"] = label
-            d["label_meta_dict"].update(new_meta)
-        elif "seg" in self.keys:
-            d["seg"] = label
-            d["seg_meta_dict"].update(new_meta)
-        elif "mask" in self.keys:
-            d["mask"] = label
-            d["mask_meta_dict"].update(new_meta)
 
         return d
 
@@ -727,3 +532,210 @@ class LoadPreprocessed(MapTransform):
                 raise ValueError("Neither npz or pkl in preprocessed loader")
 
         return new_d
+
+class AddDirectoryd(MapTransform):
+    def __init__(
+        self,
+        keys=Union[str, List[str]],
+        directory: Optional[Union[str, os.PathLike]]=None,
+        convert_to_pathlib: bool = True,
+    ) -> None:
+        super().__init__(keys)
+        self.keys = keys
+        self.directory = directory
+        self.convert_to_pathlib = convert_to_pathlib
+
+    def __call__(self, data):
+        d = dict(data)
+
+        for key in self.keys:
+            if isinstance(self.directory, os.PathLike):
+                value = self.directory / d[key]
+            elif self.directory.endswith("/"):
+                value = self.directory + "/" + d[key]
+            else:
+                value = self.directory + d[key]
+
+            if self.convert_to_pathlib:
+                value = Path(value)
+
+            d[key] = value
+
+        return d
+
+class Visualized(MapTransform):
+    """
+        This transform class takes NNUNet's preprocessing method for reference.
+        That code is in:
+        https://github.com/MIC-DKFZ/nnUNet/blob/master/nnunet/preprocessing/preprocessing.py
+    """
+
+    def __init__(
+        self,
+        keys,
+        interaction=None,
+        distancemap=False,
+        CT=False,
+        save=None,
+    ) -> None:
+        super().__init__(keys)
+        self.keys = keys
+        self.interaction = interaction
+        self.additional = None
+        self.distancemap = distancemap
+        self.CT = CT
+        self.save = save
+
+    def __call__(self, data):
+        if len(self.keys) < 1:
+            raise KeyError(f"Please provide both an image and mask, now only {self.keys} is provided")
+
+        import pdb; pdb.set_trace()
+        d = dict(data)
+        if self.interaction or self.distancemap:
+            if len(self.keys) > 3:
+                self.additional = self.keys[3:]
+                self.additional = [d[f'{x}'] for x in self.additional]
+
+            if self.distancemap:
+                image, label = self.keys[:2]
+                if self.interaction:
+                    interaction = [d[f'{interaction}_backup']]
+                else:
+                    interaction = None
+            else:
+                image, interaction, label = self.keys[:3]
+                interaction = [d[f"{interaction}"]]
+
+        else:
+            if len(self.keys) > 2:
+                self.additional = self.keys[2:]
+                self.additional = [d[x] for x in self.additional]
+
+            image, label = self.keys[:2]
+            interaction = None
+
+        if self.save:
+            save = self.save / Path(d[f'{label}_meta_dict']["filename_or_obj"]).name.split('.')[0]
+        else:
+            save = None
+
+        image = d[f'{image}']
+        label = d[f'{label}']
+
+        ImagePlot(image, label, interaction=interaction, additional_scans=self.additional, CT=self.CT, save=save, show=False)
+
+        return d
+
+class Resamplingd(MapTransform):
+    """
+        This transform class takes NNUNet's preprocessing method for reference.
+        That code is in:
+        https://github.com/MIC-DKFZ/nnUNet/blob/master/nnunet/preprocessing/preprocessing.py
+    """
+
+    def __init__(
+        self,
+        keys:Union[str, List[str]],
+        pixdim:List[float],
+    ) -> None:
+        super().__init__(keys)
+        self.keys = keys
+        self.target_spacing = pixdim
+
+    def calculate_new_shape(self, spacing_ratio:Union[np.ndarray, torch.Tensor], shape:Union[np.ndarray, torch.Tensor]):
+        new_shape = (spacing_ratio * np.array(shape)).astype(int).tolist()
+        return new_shape
+
+    def check_anisotrophy(self, spacing:List[float]):
+        def check(spacing):
+            return np.max(spacing) / np.min(spacing) >= 3
+
+        return check(spacing) or check(self.target_spacing)
+
+    def sanity_in_mask(self, interaction:Union[np.ndarray, torch.Tensor], label:Union[np.ndarray, torch.Tensor]):
+        sanity = []
+        for i, interaction_d in enumerate(interaction):
+            label_d = label[i]
+            idx_x, idx_y, idx_z = np.where(interaction_d > 0.5)
+            sanity_d = []
+            for x, y, z in zip(idx_x, idx_y, idx_z):
+                sanity_d.append(label_d[x, y, z] == 1)
+
+            sanity.append(not any(sanity_d))
+
+        return not any(sanity)
+
+    def __call__(self, data):
+        d = dict(data)
+
+        if "image" in self.keys:
+            message = "Resampling, image, "
+            image = d["image"]
+        else:
+            raise KeyError("No image provided for resampling, this is not possible...")
+
+        if "interaction" in self.keys:
+            message += "interaction, "
+            interaction = d["interaction"]
+            interaction[interaction < 0] = 0
+        else:
+            warnings.warn("No interactions are provided...")
+
+        if "label" in self.keys:
+            message += "label, "
+            label = d["label"]
+            label[label < 0] = 0
+
+        image_spacings = d["image_meta_dict"]["pixdim"][1:4].tolist()
+        print(f"Original Spacing: {image_spacings} \t Target Spacing: {self.target_spacing}")
+
+        # calculate shape
+        original_shape = image.shape[1:]
+        resample_flag = False
+        anisotrophy_flag = False
+
+        if self.target_spacing != image_spacings:
+            print(message + "because current spacing != target spacing")
+            resample_flag = True
+            spacing_ratio = np.array(image_spacings) / np.array(self.target_spacing)
+            resample_shape = self.calculate_new_shape(spacing_ratio, original_shape)
+            print(f"Original Shape: {original_shape} \t Target Shape: {resample_shape}")
+
+            anisotrophy_flag = self.check_anisotrophy(image_spacings)
+            print(f"Resampling anisotropic set to {anisotrophy_flag}")
+
+            # Actual resampling
+            image = resample_image(image, resample_shape, anisotrophy_flag)
+
+            if "label" in self.keys:
+                label = resample_label(label, resample_shape, anisotrophy_flag)
+
+            if "interaction" in self.keys:
+                interaction = resample_interaction(d["interaction"], d['interaction_meta_dict']["affine"], self.target_spacing, resample_shape)
+                if "label" in self.keys:
+                    d["interaction_meta_dict"]["in_mask"] = self.sanity_in_mask(interaction, label)
+                    if d['interaction_meta_dict']["in_mask"] == False:
+                        warnings.warn("interactions are outside of the mask, please fix this")
+
+        new_meta = {
+            "org_spacing": np.array(image_spacings),
+            "org_dim": np.array(original_shape),
+            "new_spacing": np.array(self.target_spacing),
+            "new_dim": np.array(resample_shape),
+            "resample_flag": resample_flag,
+            "anisotrophy_flag": anisotrophy_flag,
+        }
+
+        d["image"] = image
+        d["image_meta_dict"].update(new_meta)
+
+        if "interaction" in self.keys:
+            d["interaction"] = interaction
+            d["interaction_meta_dict"].update(new_meta)
+
+        if "label" in self.keys:
+            d["label"] = label
+            d["label_meta_dict"].update(new_meta)
+
+        return d

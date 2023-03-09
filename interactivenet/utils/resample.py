@@ -1,10 +1,14 @@
+from typing import List, Union
 import numpy as np
+import torch
 
 from skimage.transform import resize
 from nibabel import affines
 import numpy.linalg as npl
 
-def resample_label(label, shape, anisotrophy_flag):
+from interactivenet.utils.utils import to_array
+
+def resample_label(label:Union[np.ndarray, torch.Tensor], shape:List[int], anisotrophy_flag:bool):
     reshaped = np.zeros(shape, dtype=np.uint8)
     n_class = np.max(label)
     if anisotrophy_flag:
@@ -54,7 +58,7 @@ def resample_label(label, shape, anisotrophy_flag):
     reshaped = np.expand_dims(reshaped, 0)
     return reshaped
 
-def resample_image(image, shape, anisotrophy_flag):
+def resample_image(image:Union[np.ndarray, torch.Tensor], shape:List[int], anisotrophy_flag:bool):
     resized_channels = []
     if anisotrophy_flag:
         for image_c in image:
@@ -97,9 +101,11 @@ def resample_image(image, shape, anisotrophy_flag):
     resized = np.stack(resized_channels, axis=0)
     return resized
 
-def resample_annotation(image, affine, new_spacing, shape):
+def resample_interaction(image:Union[np.ndarray, torch.Tensor], affine:Union[np.ndarray, torch.Tensor], new_spacing:List[float], shape:List[int]):
     resized_channels = []
-    for image_d in image:
+    # Sanitize input
+    affine = to_array(affine)
+    for image_d in to_array(image):
         resized = np.zeros(shape)
         new_affine = affines.rescale_affine(affine, image_d.shape, new_spacing, new_shape=shape)
         
