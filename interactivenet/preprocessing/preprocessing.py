@@ -5,8 +5,9 @@ import pickle
 
 import numpy as np
 import os
+import argparse
 
-from monai.data import Dataset as _MonaiDataset
+from monai.data import Dataset as MonaiDataset
 from monai.transforms import (
     Compose,
     LoadImaged,
@@ -15,54 +16,51 @@ from monai.transforms import (
 )
 
 from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd, Visualized, NormalizeValuesd
+from interactivenet.utils.utils import read_dataset
 
-class Preprocessing(_MonaiDataset):
+class Preprocessing(MonaiDataset):
     def __init__(
         self,
         task: str,
-        median_shape: Tuple[float],
+        data: List[Dict[str, str]],
         target_spacing: Tuple[float],
         relax_bbox: Union[float, Tuple[float]] = 0.1,
         divisble_using: Union[int, Tuple[int]] = (16, 16, 8),
         clipping: List[float] = [],
         intensity_mean: float = 0,
         intensity_std: float = 0,
+        ct: bool = False,
     ) -> None:
         print("Initializing Preprocessing")
         self.task = task
-        self.get_files()
-
+        self.raw_path = Path(os.environ["interactiveseg_raw"], task)
+        self.processed_path = Path(os.environ["interactiveseg_processed"], task)
+        self.create_directories()
+        
+        self.data = data
         self.relax_bbox = relax_bbox
         self.divisble_using = divisble_using
         self.clipping = clipping
         self.intensity_mean = intensity_mean
         self.intensity_std = intensity_std
-        if self.clipping:
-            self.ct = True
-        else:
-            self.ct = False
-
-        self.data = [
-            {"image": img_path, "mask": mask_path, "annotation": annot_path}
-            for img_path, mask_path, annot_path in zip(self.images, self.masks, self.annotations)
-        ]
-
+        self.ct = ct
         self.transforms = Compose(
             [
-                LoadImaged(keys=["image", "annotation", "mask"]),
-                EnsureChannelFirstd(keys=["image", "annotation", "mask"]),
+                # ADD PATH
+                LoadImaged(keys=["image", "interaction", "label"]),
+                EnsureChannelFirstd(keys=["image", "interaction", "label"]),
                 Visualized(
-                    keys=["image", "annotation", "mask"],
-                    save=self.save_location / 'verbose' / 'raw',
-                    annotation=True
+                    keys=["image", "interaction", "label"],
+                    save=self.processed_path / 'verbose' / 'raw',
+                    interaction=True
                 ),
                 Resamplingd(
-                    keys=["image", "annotation", "mask"],
+                    keys=["image", "interaction", "label"],
                     pixdim=target_spacing,
                 ),
                 BoudingBoxd(
-                    keys=["image", "annotation", "mask"],
-                    on="mask",
+                    keys=["image", "interaction", "label"],
+                    on="label",
                     relaxation=self.relax_bbox,
                     divisiblepadd=self.divisble_using,
                 ),
@@ -73,12 +71,12 @@ class Preprocessing(_MonaiDataset):
                     std=self.intensity_std,
                 ),
                 Visualized(
-                    keys=["image", "annotation", "mask"],
-                    save=self.save_location / 'verbose' / 'processed',
-                    annotation=True
+                    keys=["image", "interaction", "label"],
+                    save=self.processed_path / 'verbose' / 'processed',
+                    interaction=True
                 ),
                 EGDMapd(
-                    keys=["annotation"],
+                    keys=["interaction"],
                     image="image",
                     lamb=1,
                     iter=4,
@@ -86,24 +84,23 @@ class Preprocessing(_MonaiDataset):
                     ct=self.ct
                 ),
                 DivisiblePadd(
-                    keys=["image", "annotation", "mask"],
+                    keys=["image", "interaction", "label"],
                     k=self.divisble_using
                 ),
                 Visualized(
-                    keys=["annotation", "mask"],
-                    save=self.save_location / 'verbose' / 'Map',
+                    keys=["interaction", "label"],
+                    save=self.processed_path / 'verbose' / 'Map',
                     distancemap=True,
                 ),
                 ]
         )
-        self.create_directories()
         super().__init__(self.data, self.transforms)
 
     def __call__(self) -> None:
         print("\nPreprocessing:\n")
         metainfo = {}
         for i, item in enumerate(self.data):
-            name = item["mask"].with_suffix('').stem
+            name = item["label"].with_suffix('').stem
             print(f"File: {name}")
             item = self.__getitem__(i)
 
@@ -112,21 +109,11 @@ class Preprocessing(_MonaiDataset):
             self.save_sample(item, name)
             print("")
 
-        with open(self.save_location / "metadata.pkl", 'wb') as handle:
+        with open(self.processed_path / "metadata.pkl", 'wb') as handle:
             pickle.dump(metainfo, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def get_files(self):
-        self.exp = Path(os.environ["interactiveseg_raw"], self.task)
-
-        self.images = sorted([x for x in (self.exp / "imagesTr").glob('**/*') if x.is_file()])
-        self.masks = sorted([x for x in (self.exp / "labelsTr").glob('**/*') if x.is_file()])
-        self.annotations = sorted([x for x in (self.exp / "interactionTr").glob('**/*') if x.is_file()])
-
-        self.save_location = Path(os.environ["interactiveseg_processed"], self.task)
-        self.save_location.mkdir(parents=True, exist_ok=True)
-
     def create_directories(self) -> None:
-        self.input_folder = self.save_location / "network_input"
+        self.input_folder = self.processed_path / "network_input"
         self.input_folder.mkdir(parents=True, exist_ok=True)
 
     def create_metainfo(self, item:Dict[str, Union[np.ndarray, dict]]) -> dict:
@@ -163,40 +150,35 @@ class Preprocessing(_MonaiDataset):
         with open(self.input_folder.parent / "network_input" / (name + ".pkl"), 'wb') as handle:
             pickle.dump(pickle_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-if __name__=="__main__":
-    from interactivenet.preprocessing.fingerprinting import FingerPrint
-
-    import os
-    import argparse
-
-    parser = argparse.ArgumentParser(
-             description="Preprocessing of "
-         )
-    parser.add_argument(
-        "-t",
-        "--task",
-        nargs="?",
-        default="Task710_STTMRI",
-        type=str,
-        help="Task name"
-    )
-    parser.add_argument(
-        "-o",
-        "--leave_one_out",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Do you want to do leave one out experiments?"
-    )
-    parser.add_argument(
-        "-c",
-        "--CT",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="is the data CT?"
-    )
+def main():
+    parser = argparse.ArgumentParser(description="InteractiveNet Processing")
+    parser.add_argument("-t", "--task", required=True, type=str, help="Task name")
     args = parser.parse_args()
 
-    results = FingerPrint(args.task, ct=args.CT, leave_one_out=args.leave_one_out)
-    results()
-    prepro = Preprocessing(args.task, results.dim, results.target_spacing, results.relax_bbox, results.divisible_by, results.clipping, results.intensity_mean, results.intensity_std)
-    prepro()
+    raw_path = Path(os.environ["interactiveseg_raw"], args.task)
+    data, modalities = read_dataset(raw_path)
+
+    plans = Path(os.environ["interactiveseg_processed"], args.task, "plans.json")
+    if not plans.is_file():
+        raise KeyError("Please run fingerprinting before processing data.")
+    
+    with open(plans) as f:
+        plans = json.load(f)
+
+    preprocess = Preprocessing(
+        task=args.task,
+        data=data,
+        target_spacing=plans["Fingerprint"]["Target spacing"],
+        relax_bbox=plans["Plans"]["padding"],
+        divisble_using=plans["Plans"]["divisible by"],
+        clipping=plans["Fingerprint"]["Clipping"],
+        intensity_mean=plans["Fingerprint"]["Intensity_mean"],
+        intensity_std=plans["Fingerprint"]["Intensity_std"],
+        ct=plans["Fingerprint"]["CT"],
+    )
+    preprocess()
+
+
+if __name__=="__main__":
+
+    main()

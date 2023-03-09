@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union
+from typing import List, Dict, Tuple, Union
 from pathlib import Path, PosixPath
 import math
 import random
@@ -19,6 +19,8 @@ class FingerPrint(object):
     def __init__(
         self,
         task: str,
+        data: List[Dict[str, str]],
+        modalities: Dict[str, str],
         relax_bbox: float = 0.1,
         seed: Union[int, None] = None,
         folds: int = 5,
@@ -31,12 +33,12 @@ class FingerPrint(object):
         self.processed_path = Path(os.environ["interactiveseg_processed"], task)
         self.processed_path.mkdir(parents=True, exist_ok=True)
 
-        self.data, self.modalities = read_dataset(self.raw_path)
-
+        self.data = data
         self.relax_bbox = relax_bbox
         self.seed = seed
         self.folds = folds
         self.leave_one_out = leave_one_out
+        self.modalities = modalities
 
         self.dim = []
         self.pixdim = []
@@ -419,8 +421,8 @@ class FingerPrint(object):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Preprocessing of ")
-    parser.add_argument("-t", "--task", required=True, help="Task name")
+    parser = argparse.ArgumentParser(description="InteractiveNet Fingerprinting")
+    parser.add_argument("-t", "--task", required=True, type=str, help="Task name")
     parser.add_argument(
         "-f",
         "--cross_validation_folds",
@@ -464,8 +466,13 @@ def main():
     if args.seed:
         seed = int(seed)
 
+    raw_path = Path(os.environ["interactiveseg_raw"], args.task)
+    data, modalities = read_dataset(raw_path)
+
     fingerpint = FingerPrint(
+        data=data,
         task=args.task,
+        modalities=modalities,
         relax_bbox=args.relax_bbox,
         seed=seed,
         folds=args.cross_validation_folds,

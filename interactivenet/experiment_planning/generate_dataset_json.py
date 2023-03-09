@@ -110,7 +110,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Create dataset.json with all metadata from dataset"
     )
-    parser.add_argument("-t", "--task", required=True, help="Task name")
+    parser.add_argument("-t", "--task", required=True, type=str, help="Task name")
     parser.add_argument(
         "-m",
         "--modalities",

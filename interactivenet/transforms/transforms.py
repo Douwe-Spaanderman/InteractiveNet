@@ -129,7 +129,7 @@ class Visualized(MapTransform):
     def __init__(
         self,
         keys,
-        annotation=None,
+        interaction=None,
         distancemap=False,
         CT=False,
         save=None,

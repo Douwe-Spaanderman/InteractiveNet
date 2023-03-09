@@ -19,7 +19,7 @@ def pol2cart(rho, phi):
     return(x, y)
 
 
-def ImagePlot(img, GT, annotation=None, additional_scans=None, CT=False, radius=1, zoom=False, show=None, save=None, save_type='png', colors=['dodgerblue', 'magenta', 'cyan', 'navy', 'purple'], cmap=plt.cm.gray, ax=None):
+def ImagePlot(img, GT, interaction=None, additional_scans=None, CT=False, radius=1, zoom=False, show=None, save=None, save_type='png', colors=['dodgerblue', 'magenta', 'cyan', 'navy', 'purple'], cmap=plt.cm.gray, ax=None):
     if not isinstance(GT, list):
         segs = [GT]
     else:
@@ -28,8 +28,8 @@ def ImagePlot(img, GT, annotation=None, additional_scans=None, CT=False, radius=
     if additional_scans:
         segs.extend(additional_scans)
 
-    if annotation:
-        segs.extend(annotation)
+    if interaction:
+        segs.extend(interaction)
 
     img = to_array(img)
     segs = [to_array(seg) for seg in segs]
@@ -38,7 +38,7 @@ def ImagePlot(img, GT, annotation=None, additional_scans=None, CT=False, radius=
         img = img[0]
         segs = [seg[0] for seg in segs]
 
-    if annotation:
+    if interaction:
         _, _, inds_z = np.where(segs[-1] > 0.5)
         inds_z = sorted(inds_z)
         slice = inds_z[int((len(inds_z) - 1)/2)]

@@ -13,7 +13,7 @@ setup(
         "GeodisTK>=0.1.7",
         "matplotlib>=3.5.1",
         "mlflow>=1.24.0",
-        "monai==0.8.1",
+        "monai>=1.0.0",
         "nibabel>=3.2.2",
         "numpy>=1.22.3",
         "Pillow>=9.2.0",
@@ -28,7 +28,9 @@ setup(
         'console_scripts': [
             'interactivenet_mimic_interactions=interactivenet.experiment_planning.mimic_annotations:main',
             'interactivenet_generate_dataset_json=interactivenet.experiment_planning.generate_dataset_json:main',
-            'interactivenet_fingerprinting=interactivenet.experiment_planning.fingerprinting:main'
+            'interactivenet_fingerprinting=interactivenet.experiment_planning.fingerprinting:main',
+            'interactivenet_plan_and_process=interactivenet.experiment_planning.plan_and_process:main',
+            'interactivenet_preprocessing=interactivenet.preprocessing.preprocessing:main'
             ]
     },
     keywords=[
