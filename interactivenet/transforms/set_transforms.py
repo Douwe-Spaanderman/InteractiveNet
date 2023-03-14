@@ -183,3 +183,5 @@ def training_transforms(
     ]
 
     return Compose(transforms)
+
+def inference_transforms():

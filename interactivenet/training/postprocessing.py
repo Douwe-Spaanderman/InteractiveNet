@@ -1,3 +1,5 @@
+from typing import List, Tuple, Dict, Sequence, Optional, Callable, Union
+
 from pathlib import Path
 import numpy as np
 import os
@@ -29,11 +31,23 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 
 import mlflow.pytorch
+from interactivenet.utils.mlflow import mlflow_get_runs
+from interactivenet.utils.utils import read_processed, read_metadata, check_gpu
 
-class Net(pl.LightningModule):
-    def __init__(self, data, metadata, model, split=0, checkpoint=None):
+class Postprocessing(pl.LightningModule):
+    def __init__(self, 
+        data:List[Dict[str, str]], 
+        metadata:dict,
+        model:str,
+        accelerator:Optional[str]="cuda",
+        split:int=0,
+        checkpoint:Optional[str]=None,
+        ):
         super().__init__()
-        self._model = mlflow.pytorch.load_model(model, map_location=torch.device('cuda'))
+        if accelerator == "gpu":
+            accelerator = "cuda"
+            
+        self._model = mlflow.pytorch.load_model(model, map_location=torch.device(accelerator))
         self.data = data
         self.metadata = metadata
         self.split = split
@@ -110,27 +124,21 @@ class Net(pl.LightningModule):
         [self.log(self.configurations[i], x) for i, x in enumerate(mean_val_dice)]
         return mean_val_dice
 
-
-if __name__=="__main__":
+def main():
     parser = argparse.ArgumentParser(
-             description="Preprocessing of "
+             description="Postprocessing of the interactivenet network"
          )
-    parser.add_argument(
-         "-t",
-         "--task",
-         nargs="?",
-         default="Task710_STTMRI",
-         help="Task name"
-    )
+    parser.add_argument("-t", "--task", required=True, type=str, help="Task name")
     args = parser.parse_args()
-    exp = Path(os.environ["interactiveseg_processed"], args.task)
 
-    from interactivenet.utils.utils import read_processed, read_metadata
+    exp = Path(os.environ["interactiveseg_processed"], args.task)
+    results = Path(os.environ["interactiveseg_results"], "mlruns")
+
     data = read_processed(exp)
     metadata = read_metadata(exp / "plans.json")
 
-
-    from interactivenet.utils.mlflow import mlflow_get_runs
+    accelerator, devices, precision = check_gpu()
+    mlflow.set_tracking_uri(results)
     runs, experiment_id = mlflow_get_runs(args.task)
 
     mlflow.pytorch.autolog()
@@ -149,9 +157,10 @@ if __name__=="__main__":
         with mlflow.start_run(run_id=run_id) as run:
             artifact_path = Path(mlflow.get_artifact_uri().split('file://')[-1])
 
-            network = Net(data, metadata, model, split=fold, checkpoint=ckpt)
+            network = Postprocessing(data, metadata, model, accelerator=accelerator, split=fold, checkpoint=ckpt)
             trainer = pl.Trainer(
-                gpus=-1,
+                accelerator=accelerator,
+                devices=devices,
                 default_root_dir=artifact_path
             )
             
@@ -175,3 +184,6 @@ if __name__=="__main__":
 
             mlflow.log_dict(postprocessing, "postprocessing.json")
             mlflow.set_tag('Postprocessing', 'Done')
+
+if __name__=="__main__":
+    main()

@@ -31,7 +31,12 @@ setup(
             'interactivenet_fingerprinting=interactivenet.experiment_planning.fingerprinting:main',
             'interactivenet_preprocessing=interactivenet.experiment_planning.preprocessing:main',
             'interactivenet_plan_and_process=interactivenet.experiment_planning.plan_and_process:main',
-            'interactivenet_train=interactivenet.training.run:main'
+            'interactivenet_train=interactivenet.training.run:main',
+            'interactivenet_postprocessing=interactivenet.training.postprocessing:main',
+            'interactivenet_ensemble=interactivenet.test.ensemble:main',
+            'interactivenet_inference=interactivenet.test.inference:main',
+            'interactivenet_predict=interactivenet.test.predict:main',
+            'interactivenet_test=interactivenet.test.run:main',
             ]
     },
     keywords=[

@@ -25,6 +25,9 @@ from interactivenet.utils.postprocessing import ApplyPostprocessing
 import nibabel as nib
 from interactivenet.utils.resample import resample_label
 
+def main():
+    print('Not implemented yet')
+
 if __name__=="__main__":
     parser = argparse.ArgumentParser(
             description="Ensembling of predicted weights"

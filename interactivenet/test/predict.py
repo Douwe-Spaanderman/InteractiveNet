@@ -42,8 +42,13 @@ import pytorch_lightning as pl
 import mlflow.pytorch
 from mlflow.utils.mlflow_tags import MLFLOW_PARENT_RUN_ID
 
-class Net(pl.LightningModule):
-    def __init__(self, data, metadata, model, tta=False):
+class PredictModule(pl.LightningModule):
+    def __init__(
+        self, 
+        data, 
+        metadata, 
+        model, 
+        tta=False):
         super().__init__()
         self._model = mlflow.pytorch.load_model(model, map_location=torch.device('cuda'))
         self.data = data
@@ -126,6 +131,9 @@ class Net(pl.LightningModule):
 
         return output, meta
 
+def main():
+    print('Not implemented yet')
+
 if __name__=="__main__":
     import argparse
     import os
@@ -200,7 +208,7 @@ if __name__=="__main__":
         else:
             model = "runs:/" + run_id + "/model"
 
-        network = Net(data, metadata, model, tta=args.tta)
+        network = PredictModule(data, metadata, model, tta=args.tta)
 
         trainer = pl.Trainer(
             gpus=-1,

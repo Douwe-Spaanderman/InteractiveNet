@@ -39,6 +39,9 @@ import pytorch_lightning as pl
 import mlflow.pytorch
 from mlflow.utils.mlflow_tags import MLFLOW_PARENT_RUN_ID
 
+def main():
+    print('Not implemented yet')
+
 if __name__=="__main__":
     parser = argparse.ArgumentParser(
             description="Ensembling of predicted weights"

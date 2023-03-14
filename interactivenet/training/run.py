@@ -1,3 +1,5 @@
+from typing import List, Tuple, Dict, Sequence, Optional, Callable, Union
+
 from pathlib import Path
 import numpy as np
 import os
@@ -24,7 +26,13 @@ from interactivenet.utils.mlflow import mlflow_get_id
 from interactivenet.utils.utils import read_processed, read_metadata, check_gpu
 
 class Net(pl.LightningModule):
-    def __init__(self, data, metadata, split=0, filters=[4, 8, 16, 32, 64, 128]):
+    def __init__(
+        self, 
+        data:List[Dict[str, str]], 
+        metadata:dict, 
+        split:int=0, 
+        filters:List[int]=[4, 8, 16, 32, 64, 128]
+        ):
         super().__init__()
         self._model = DynUNet(
             spatial_dims=3,
