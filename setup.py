@@ -22,6 +22,8 @@ setup(
         "scikit_image>=0.19.2",
         "scikit_learn>=1.1.1",
         "scipy>=1.8.0",
+        "seaborn>=0.12.2",
+        "pyradiomics>=3.0.1"
     ],
     setup_requires=['pytest', 'black', 'setuptools'],
     entry_points={

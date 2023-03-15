@@ -1,4 +1,4 @@
-from typing import Union, Dict
+from typing import Union, Dict, Type
 
 import pandas as pd
 import numpy as np
@@ -15,8 +15,11 @@ import SimpleITK as sitk
 from radiomics.shape import RadiomicsShape
 
 def CalculateScores(pred:Union[np.ndarray, torch.Tensor], mask:Union[np.ndarray, torch.Tensor], include_background:bool=False):
-    pred = to_torch(pred)
-    mask = to_torch(mask)
+    if isinstance(pred, np.ndarray):
+        pred = to_torch(pred)
+
+    if isinstance(mask, np.ndarray):
+        mask = to_torch(mask)
 
     pred_shape = pred.shape
     mask_shape = mask.shape
@@ -115,7 +118,6 @@ def ComparePlot(data, hue=False):
     data["Names"] = data.index
     data = data.reset_index()
 
-    print(data)
     if hue:
         sns.scatterplot(x="GT", y="Pred", data=data, linewidth=0, ax=ax)
     else:

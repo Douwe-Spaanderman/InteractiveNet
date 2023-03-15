@@ -1,4 +1,4 @@
-from typing import Union, Dict
+from typing import Union, Dict, Type
 
 import os
 import json
@@ -9,6 +9,33 @@ import torch
 
 import nibabel as nib
 import SimpleITK as sitk
+
+import mlflow
+import uuid
+
+import pickle
+
+def save_weights(mlflow, outputs:list):
+    for output in outputs:
+        name = Path(output[1][0]["filename_or_obj"]).name.split('.')[0]
+        weights = output[0][0]
+        meta = outputs[1][0]
+        tmp_dir = Path("/tmp/", str(uuid.uuid4()))
+        print(f"saving weights to {tmp_dir} before moving to artifacts.")
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        data_file = tmp_dir / f"{name}.npz"
+
+        np.savez(str(data_file), weights=weights)
+        mlflow.log_artifact(str(data_file), artifact_path="weights")
+        data_file.unlink()
+
+        data_file = tmp_dir / f"{name}.pkl"
+        with open(str(data_file), 'wb') as handle:
+            pickle.dump(meta, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        mlflow.log_artifact(str(data_file), artifact_path="weights")
+        data_file.unlink()
+        tmp_dir.rmdir()
 
 def read_dataset(datapath:Union[str, os.PathLike], mode="train", error_message=None):
     datapath = to_pathlib(datapath)

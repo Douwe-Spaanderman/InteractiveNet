@@ -34,7 +34,7 @@ import mlflow.pytorch
 from interactivenet.utils.mlflow import mlflow_get_runs
 from interactivenet.utils.utils import read_processed, read_metadata, check_gpu
 
-class Postprocessing(pl.LightningModule):
+class PostprocessingModule(pl.LightningModule):
     def __init__(self, 
         data:List[Dict[str, str]], 
         metadata:dict,
@@ -79,10 +79,10 @@ class Postprocessing(pl.LightningModule):
         
         val_transforms = Compose(
             [
-                LoadPreprocessed(keys=["npz", "metadata"], new_keys=["image", "annotation", "mask"]),
-                CastToTyped(keys=["image", "annotation", "mask"], dtype=(np.float32, np.float32, np.uint8)),
-                ConcatItemsd(keys=["image", "annotation"], name="image"),
-                ToTensord(keys=["image", "mask"]),
+                LoadPreprocessed(keys=["npz", "metadata"], new_keys=["image", "interaction", "label"]),
+                CastToTyped(keys=["image", "interaction", "label"], dtype=(np.float32, np.float32, np.uint8)),
+                ConcatItemsd(keys=["image", "interaction"], name="image"),
+                ToTensord(keys=["image", "label"]),
             ]
         )
 
@@ -99,7 +99,7 @@ class Postprocessing(pl.LightningModule):
         return val_loader
 
     def validation_step(self, batch, batch_idx):
-        images, labels = batch["image"], batch["mask"]
+        images, labels = batch["image"], batch["label"]
         outputs = []
         outputs.append(self.forward(images, self._model))
 
@@ -124,20 +124,12 @@ class Postprocessing(pl.LightningModule):
         [self.log(self.configurations[i], x) for i, x in enumerate(mean_val_dice)]
         return mean_val_dice
 
-def main():
-    parser = argparse.ArgumentParser(
-             description="Postprocessing of the interactivenet network"
-         )
-    parser.add_argument("-t", "--task", required=True, type=str, help="Task name")
-    args = parser.parse_args()
-
-    exp = Path(os.environ["interactiveseg_processed"], args.task)
-    results = Path(os.environ["interactiveseg_results"], "mlruns")
-
-    data = read_processed(exp)
-    metadata = read_metadata(exp / "plans.json")
-
-    accelerator, devices, precision = check_gpu()
+def postprocessing(
+    data:List[Dict[str, str]], 
+    metadata:dict,
+    accelerator:Optional[str],
+    devices:Optional[str]:
+    ): 
     mlflow.set_tracking_uri(results)
     runs, experiment_id = mlflow_get_runs(args.task)
 
@@ -157,7 +149,7 @@ def main():
         with mlflow.start_run(run_id=run_id) as run:
             artifact_path = Path(mlflow.get_artifact_uri().split('file://')[-1])
 
-            network = Postprocessing(data, metadata, model, accelerator=accelerator, split=fold, checkpoint=ckpt)
+            network = PostprocessingModule(data=data, metadata=metadata, model=model, accelerator=accelerator, split=fold, checkpoint=ckpt)
             trainer = pl.Trainer(
                 accelerator=accelerator,
                 devices=devices,
@@ -184,6 +176,23 @@ def main():
 
             mlflow.log_dict(postprocessing, "postprocessing.json")
             mlflow.set_tag('Postprocessing', 'Done')
+
+def main():
+    parser = argparse.ArgumentParser(
+             description="Postprocessing of the interactivenet network"
+         )
+    parser.add_argument("-t", "--task", required=True, type=str, help="Task name")
+    args = parser.parse_args()
+
+    exp = Path(os.environ["interactiveseg_processed"], args.task)
+    results = Path(os.environ["interactiveseg_results"], "mlruns")
+
+    data = read_processed(exp)
+    metadata = read_metadata(exp / "plans.json")
+
+    accelerator, devices, _ = check_gpu()
+
+    postprocessing(data=data, metadata=metadata, accelerator=accelerator, devices=devices)
 
 if __name__=="__main__":
     main()

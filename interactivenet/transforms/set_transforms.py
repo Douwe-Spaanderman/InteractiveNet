@@ -21,6 +21,7 @@ from monai.transforms import (
     RandAdjustContrastd,
     RandZoomd,
     RandRotated,
+    CopyItemsd
 )
 
 from interactivenet.transforms.transforms import (
@@ -184,4 +185,55 @@ def training_transforms(
 
     return Compose(transforms)
 
-def inference_transforms():
+def inference_transforms(
+    metadata:dict,
+    labels:bool = False,
+    raw_path: Optional[Union[str, os.PathLike]] = None,
+    ):
+
+    transforms = []
+    if labels:
+        transforms += [
+            AddDirectoryd(keys=["image", "interaction", "label"], directory=raw_path, convert_to_pathlib=True),
+            LoadImaged(keys=["image", "interaction", "label"]),
+            EnsureChannelFirstd(keys=["image", "interaction", "label"]),
+            CopyItemsd(keys=["image"], names=["image_raw"])
+        ]
+    else:
+        transforms += [
+            AddDirectoryd(keys=["image", "interaction"], directory=raw_path, convert_to_pathlib=True),
+            LoadImaged(keys=["image", "interaction"]),
+            EnsureChannelFirstd(keys=["image", "interaction"]),
+        ]
+
+    transforms += [
+        Resamplingd(
+            keys=["image", "interaction"],
+            pixdim=metadata["Fingerprint"]["Target spacing"],
+        ),
+        BoudingBoxd(
+            keys=["image", "interaction"],
+            on="interaction",
+            relaxation=metadata["Plans"]["padding"],
+            divisiblepadd=metadata["Plans"]["divisible by"],
+        ),
+        NormalizeValuesd(
+            keys=["image"],
+            clipping=metadata["Fingerprint"]["Clipping"],
+            mean=metadata["Fingerprint"]["Intensity_mean"],
+            std=metadata["Fingerprint"]["Intensity_std"],
+        ),
+        EGDMapd(
+            keys=["interaction"],
+            image="image",
+            lamb=1,
+            iter=4,
+            logscale=True,
+            ct=metadata["Fingerprint"]["CT"],
+        ),
+        CastToTyped(keys=["image", "interaction"], dtype=(np.float32, np.float32)),
+        ToTensord(keys=["interaction"]),
+        ConcatItemsd(keys=["image", "interaction"], name="image"),
+    ]
+    
+    return Compose(transforms)

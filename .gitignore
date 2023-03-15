@@ -133,3 +133,4 @@ data/*
 mlruns/*
 slurm/*
 exp/*
+lightning_logs/*
