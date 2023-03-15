@@ -1,4 +1,4 @@
-from typing import Union, Dict, Type
+from typing import List, Tuple, Dict, Sequence, Optional, Callable, Union
 
 import os
 import json
@@ -15,13 +15,37 @@ import uuid
 
 import pickle
 
+from monai.transforms import AsDiscrete
+
+def save_niftis(mlflow, outputs:list, postprocessing:str):
+    argmax = AsDiscrete(argmax=True)
+    tmp_dir = Path("/tmp/", str(uuid.uuid4()))
+    print(f"saving niftis to {tmp_dir} before moving to artifacts.")
+    for output in outputs:
+        name = Path(output[1][0]["filename_or_obj"]).name.split('.')[0]
+        pred = output[0][0]
+        meta = output[1][0]
+
+        pred = argmax(pred)
+        pred = ApplyPostprocessing(pred, postprocessing)
+        
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        data_file = tmp_dir / f"{name}.nii.gz"
+
+        output = nib.Nifti1Image(pred, meta["affine"])
+        mlflow.log_artifact(str(data_file), artifact_path="niftis")
+        data_file.unlink()
+    
+    tmp_dir.rmdir()
+
 def save_weights(mlflow, outputs:list):
+    tmp_dir = Path("/tmp/", str(uuid.uuid4()))
+    print(f"saving weights to {tmp_dir} before moving to artifacts.")
     for output in outputs:
         name = Path(output[1][0]["filename_or_obj"]).name.split('.')[0]
         weights = output[0][0]
-        meta = outputs[1][0]
-        tmp_dir = Path("/tmp/", str(uuid.uuid4()))
-        print(f"saving weights to {tmp_dir} before moving to artifacts.")
+        meta = output[1][0]
+
         tmp_dir.mkdir(parents=True, exist_ok=True)
         data_file = tmp_dir / f"{name}.npz"
 
@@ -35,7 +59,21 @@ def save_weights(mlflow, outputs:list):
 
         mlflow.log_artifact(str(data_file), artifact_path="weights")
         data_file.unlink()
-        tmp_dir.rmdir()
+    
+    tmp_dir.rmdir()
+
+def read_pickle(datapath:Union[str, os.PathLike]):
+    datapath = to_pathlib(datapath)
+
+    objects = []
+    with (open(datapath, "rb")) as openfile:
+        while True:
+            try:
+                objects.append(pickle.load(openfile))
+            except EOFError:
+                break
+
+    return objects
 
 def read_dataset(datapath:Union[str, os.PathLike], mode="train", error_message=None):
     datapath = to_pathlib(datapath)
@@ -52,22 +90,37 @@ def read_dataset(datapath:Union[str, os.PathLike], mode="train", error_message=N
         else:
             raise KeyError(f"dataset.json does not exist at path: {datapath}")
 
-def read_nifti(data:Dict, test:bool=False):
+def read_nifti(data:Dict, raw_path:Optional[Union[str, os.PathLike]], rename_image:Optional[str]="image_raw"):
+    labels = all([x["label"] != "" for x in data])
+
+    raw_path = to_pathlib(raw_path)
     loaded_data = {}
     for idx in data:
         idx_data = {}
-        img = nib.load(idx["image"])
-        name = "_".join(idx["image"].name.split('.')[0].split("_")[:-1])
-        idx_data["image"] = img.get_fdata()
-        idx_data["image_meta_dict"] = img.header
-        if not test:
-            masks = nib.load(idx["mask"])
-            idx_data["masks"] = masks.get_fdata()
-            idx_data["masks_meta_dict"] = masks.header
+        name = Path(idx["interaction"]).name.split(".")[0]
+        
+        img = nib.load(raw_path / idx["image"])
+        if rename_image:
+            idx_data[rename_image] = [img.get_fdata()[None, :]] # Adding a channel and in list to match batch output
+        else:
+            idx_data["image"] = [img.get_fdata()[None, :]]
+            
+        idx_data["image_meta_dict"] = [img.header]
+
+        inter = nib.load(raw_path / idx["interaction"])
+        idx_data["interaction"] = [inter.get_fdata()[None, :]]
+        idx_data["interaction_meta_dict"] = [inter.header]
+
+        idx_data["class"] = [idx["class"]]
+        
+        if labels:
+            label = nib.load(raw_path / idx["label"])
+            idx_data["label"] = [label.get_fdata()[None, :]]
+            idx_data["label_meta_dict"] = [label.header]
 
         loaded_data.update({name: idx_data})
 
-    return loaded_data
+    return loaded_data, labels
 
 def read_processed(datapath:Union[str, os.PathLike]):
     datapath = to_pathlib(datapath)
@@ -81,31 +134,6 @@ def read_processed(datapath:Union[str, os.PathLike]):
     return [
             {"npz": npz_path, "metadata": metafile_path}
             for npz_path, metafile_path in zip(arrays, metafile)
-        ]
-
-def read_data(datapath:Union[str, os.PathLike], test:bool=False):
-    datapath = to_pathlib(datapath)
-
-    images = sorted([x for x in (datapath / "imagesTs").glob('**/*') if x.is_file()])
-    annotations = sorted([x for x in (datapath / "interactionTs").glob('**/*') if x.is_file()])
-
-    if len(images) != len(annotations):
-        raise ValueError("not the same number files for images and annotations")
-
-    if not test:
-        masks = sorted([x for x in (datapath / "labelsTs").glob('**/*') if x.is_file()])
-        if not len(images) == len(masks) == len(annotations):
-            raise ValueError("not the same number files for images, masks and annotations")
-        
-        return [
-            {"image": img_path, "mask": mask_path, "annotation": annot_path}
-            for img_path, mask_path, annot_path in zip(images, masks, annotations)
-        ]
-        
-    else:
-        return [
-            {"image": img_path, "annotation": annot_path}
-            for img_path, annot_path in zip(images, annotations)
         ]
 
 def read_metadata(metapath:Union[str, os.PathLike], error_message=None):

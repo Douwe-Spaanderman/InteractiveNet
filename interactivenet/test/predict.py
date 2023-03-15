@@ -40,9 +40,9 @@ from interactivenet.transforms.set_transforms import inference_transforms
 from interactivenet.utils.visualize import ImagePlot
 from interactivenet.utils.statistics import ResultPlot, CalculateScores
 from interactivenet.utils.postprocessing import ApplyPostprocessing
-from interactivenet.utils.utils import save_weights, read_metadata, read_data, read_types, read_nifti, read_dataset, check_gpu
+from interactivenet.utils.results import AnalyzeResults
+from interactivenet.utils.utils import save_weights, read_metadata, read_types, read_nifti, read_dataset, check_gpu
 from interactivenet.utils.mlflow import mlflow_get_runs
-from interactivenet.test.run import AnalyzeResults
 
 import torch
 import pytorch_lightning as pl
@@ -57,7 +57,6 @@ class PredictModule(pl.LightningModule):
         metadata:dict, 
         task:str,
         model:str,
-        postprocessing:Dict[str, str],
         accelerator:Optional[str]="cuda",
         tta:bool=True
         ):
@@ -69,7 +68,6 @@ class PredictModule(pl.LightningModule):
         self.data = data
         self.metadata = metadata
         self.tta = tta
-        self.postprocessing = postprocessing
         self.post_numpy = EnsureType("numpy", device="cpu")
         self.original_size = OriginalSize(metadata["Fingerprint"]["Anisotropic"])
         self.labels = all([idx["label"] != "" for idx in self.data])
@@ -127,6 +125,8 @@ def predict(
     mlflow.set_tracking_uri(results)
     runs, experiment_id = mlflow_get_runs(task)
 
+    all_outputs = []
+    postprocessings = []
     for idx, run in runs.iterrows():
         if run["tags.Mode"] != "training":
             continue
@@ -140,7 +140,7 @@ def predict(
         else:
             model = "runs:/" + run_id + "/model"
 
-        network = PredictModule(data=data, metadata=metadata, task=task, model=model, postprocessing=postprocessing, accelerator=accelerator, tta=tta)
+        network = PredictModule(data=data, metadata=metadata, task=task, model=model, accelerator=accelerator, tta=tta)
 
         # Required to log artifacts
         trainer = pl.Trainer(
@@ -150,12 +150,18 @@ def predict(
 
         with mlflow.start_run(experiment_id=experiment_id, tags={MLFLOW_PARENT_RUN_ID: run_id}, run_name="predict") as run:
             mlflow.set_tag('Mode', 'testing')
+            mlflow.log_dict(postprocessing, "postprocessing.json")
             outputs = trainer.predict(model=network)
 
             if weights:
                 save_weights(mlflow, outputs)
 
-            AnalyzeResults(mlflow=mlflow, outputs=outputs, postprocessing=postprocessing, metadata=metadata, label=network.labels)
+            AnalyzeResults(mlflow=mlflow, outputs=outputs, postprocessing=postprocessing["postprocessing"], metadata=metadata, labels=network.labels)
+
+            postprocessings.append(postprocessing["postprocessing"])
+            all_outputs.append(outputs)
+
+    return all_outputs, postprocessings, network.labels
             
 def main():
     parser = argparse.ArgumentParser(

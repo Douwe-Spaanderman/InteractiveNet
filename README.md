@@ -86,6 +86,7 @@ All experiments results as well as trained models can be found in the interactiv
 - [ ] Support lower memory graphic cards for high dimensional CT data
 - [ ] Support multi-modality input
 - [ ] Support multi labels, and multi interactions
+- [ ] Resample label back instead of weights
 
 # Acknowledgements
 
