@@ -75,6 +75,40 @@ Additional options can be found under ```-h``` or ```--help```.
 
 All experiments results as well as trained models can be found in the interactivenet_results folder. Tracking experiments and visualizing results is done in MLflow, for which documentation can be found [here](documentation/mlflow.md).
 
+## Testing
+
+After training has been run, InteractiveNet can be used to test the data present in imagesTs (and compare to labelsTs if available). Note that you need to adhere to this [format](documentation/dataset_conversion.md).
+
+Testing consists of three parts, identifying best postprocessing (this has to be run ones), running prediction for each fold, and ensembling. **Note that you should only continue when are folds have been trained**. In order to run the complete testing pipeline you can use:
+
+```
+interactivenet_test -t TaskXXX_YOURTASK
+```
+
+Output can both be saved as raw weights ```-w``` or ```--weights``` and predicted niftis ```-n``` or ```--niftis```. Additional options can be found under ```-h``` or ```--help```.
+
+We again use [mlflow](documentation/mlflow.md) in order to log postprocessing, predictions and ensembling. Logging includes metric calculations (dice similarity coefficient (DSC), hausdorff distance (HD), average surface distance (ASD)), which are saved as .json or visualized using [seaborn](https://seaborn.pydata.org/). Finally, we automatically generate a .png file of the raw image with the predicted (and if provided ground truth) segmentation. The slice is chosen based on the center of mass of the segmentation.
+
+Components of the interactivenet can be individually run. **below is not required if you have succesfully run ```interactivenet_test```**. To run postpostprocessing:
+
+```
+interactivenet_postprocessing -t TaskXXX_YOURTASK
+```
+
+To run predictions:
+
+```
+interactivenet_predict -t TaskXXX_YOURTASK -w
+```
+
+note that for ensembling, weights need to be saved in predict (```-w```). **weights are large .npz files, keep this in mind when running multiple experiments, after ensembling .npz files can be safelty removed**. To run ensembling:
+
+```
+interactivenet_ensemble -t TaskXXX_YOURTASK
+```
+
+Additional options for all three above scripts can be found under ```-h``` or ```--help```.
+
 ## Inference
 
 ## Running using a pretrained model

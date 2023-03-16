@@ -50,28 +50,40 @@ def read_prediction(
     raw_data, labels = read_nifti(data=data, raw_path=raw_path, rename_image="image_raw")
 
     n = 0
-    outputs = []
-    metas = []
+    final_results = []
     names = []
     postprocessing = []
     for idx, run in runs.iterrows():
         # looping to test experiments to extract weights and meta info
         if run["tags.Mode"] == "testing":
+            results = []
             experiment = Path(run["artifact_uri"].split("//")[-1])
             weights = experiment / "weights"
             if weights.is_dir():
-                output = sorted([x for x in weights.glob("*.npz")])
-                names.append(sorted([x.stem for x in output]))
-                outputs.append(output)
+                outputs = sorted([x for x in weights.glob("*.npz")])
+                metas = sorted([x for x in weights.glob("*.pkl")])
 
-                meta = sorted([x for x in weights.glob("*.pkl")])
-                metas.append(meta)
+                names.append(sorted([x.stem for x in outputs]))
+
+                for output, meta in zip(outputs, metas):
+                    name = output.stem
+                    raw = raw_data[name]
+                    output = np.load(output)["weights"]
+                    meta = read_pickle(meta)
+
+                    results.append([
+                        [output],
+                        meta,
+                        raw,
+                        ]
+                    )
             else:
                 raise ValueError("No weights are available to ensemble, please use predict with -w or --weights to save outputs as weights")
 
             postprocessing.append(read_metadata(experiment / "postprocessing.json", error_message="postprocessing hasn't been run yet, please do this before predictions")["postprocessing"])
-            
+
             n += 1
+            final_results.append(results)
 
     print(f"founds {n} folds to use in ensembling")
     if n <= 1:
@@ -81,28 +93,7 @@ def read_prediction(
     elif n != 5:
         warnings.warn("NOT ALL 5 FOLDS WERE TRAINED!")
 
-    results = []
-    method = MeanEnsemble()
-    for output, meta, names in zip(zip(*outputs), zip(*metas), zip(*names)):
-        name = names[0]
-        
-        if any([x != name for x in names[1:]]):
-            raise ValueError("Not images in runs match")
-
-        meta = [read_pickle(x) for x in meta]
-
-        output = np.stack([np.load(x)["weights"] for x in output], axis=0)
-        output = method(output)
-
-        raw = raw_data[name]
-        results.append([
-            [output],
-            meta[0],
-            raw,
-            ]
-        )
-        
-    return results, postprocessing, labels
+    return final_results, postprocessing, labels
 
 def ensemble(
     outputs:list, 
@@ -117,19 +108,29 @@ def ensemble(
     mlflow.set_tracking_uri(results)
     runs, experiment_id = mlflow_get_runs(task)
 
+    method = MeanEnsemble()
     postprocessing = Counter(postprocessing).most_common()[0][0]
 
     with mlflow.start_run(experiment_id=experiment_id, run_name="ensemble") as run:
         mlflow.set_tag('Mode', 'ensemble')
         mlflow.log_param("method", "mean ensembling")
 
+        final_results = []
+        for output in zip(*outputs):
+            final_output = method([weight[0][0] for weight in output])
+            final_results.append([
+                [final_output],
+                output[0][1], # Metadata from first pred in ensemble
+                output[0][2], # Raw data from first pred in ensemble
+            ])
+        
         if weights:
-            save_weights(mlflow, outputs)
+            save_weights(mlflow, final_results)
 
         if niftis:
-            save_niftis(mlflow, outputs, postprocessing=postprocessing)
+            save_niftis(mlflow, final_results, postprocessing=postprocessing)
 
-        AnalyzeResults(mlflow=mlflow, outputs=outputs, postprocessing=postprocessing, metadata=metadata, labels=labels)
+        AnalyzeResults(mlflow=mlflow, outputs=final_results, postprocessing=postprocessing, metadata=metadata, labels=labels)
 
 def main():
     parser = argparse.ArgumentParser(

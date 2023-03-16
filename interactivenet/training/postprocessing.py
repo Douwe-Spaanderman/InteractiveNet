@@ -124,14 +124,16 @@ class PostprocessingModule(pl.LightningModule):
         [self.log(self.configurations[i], x) for i, x in enumerate(mean_val_dice)]
         return mean_val_dice
 
-def postprocessing(
+def run_postprocessing(
     data:List[Dict[str, str]], 
     metadata:dict,
+    task:str,
     accelerator:Optional[str],
-    devices:Optional[str]:
+    devices:Optional[str],
+    results:Optional[Union[str, os.PathLike]],
     ): 
     mlflow.set_tracking_uri(results)
-    runs, experiment_id = mlflow_get_runs(args.task)
+    runs, experiment_id = mlflow_get_runs(task)
 
     mlflow.pytorch.autolog()
     for idx, run in runs.iterrows():
@@ -192,7 +194,7 @@ def main():
 
     accelerator, devices, _ = check_gpu()
 
-    postprocessing(data=data, metadata=metadata, accelerator=accelerator, devices=devices)
+    run_postprocessing(data=data, metadata=metadata, task=args.task, accelerator=accelerator, devices=devices, results=results)
 
 if __name__=="__main__":
     main()

@@ -41,7 +41,7 @@ from interactivenet.utils.visualize import ImagePlot
 from interactivenet.utils.statistics import ResultPlot, CalculateScores
 from interactivenet.utils.postprocessing import ApplyPostprocessing
 from interactivenet.utils.results import AnalyzeResults
-from interactivenet.utils.utils import save_weights, read_metadata, read_types, read_nifti, read_dataset, check_gpu
+from interactivenet.utils.utils import save_weights, save_niftis, read_metadata, read_types, read_nifti, read_dataset, check_gpu
 from interactivenet.utils.mlflow import mlflow_get_runs
 
 import torch
@@ -120,7 +120,8 @@ def predict(
     devices:Optional[str],
     results:Optional[Union[str, os.PathLike]],
     tta:bool=True,
-    weights:bool=True
+    weights:bool=False,
+    niftis:bool=False
     ):
     mlflow.set_tracking_uri(results)
     runs, experiment_id = mlflow_get_runs(task)
@@ -156,6 +157,9 @@ def predict(
             if weights:
                 save_weights(mlflow, outputs)
 
+            if niftis:
+                save_niftis(mlflow, outputs, postprocessing=postprocessing["postprocessing"])
+
             AnalyzeResults(mlflow=mlflow, outputs=outputs, postprocessing=postprocessing["postprocessing"], metadata=metadata, labels=network.labels)
 
             postprocessings.append(postprocessing["postprocessing"])
@@ -172,8 +176,15 @@ def main():
         "-a",
         "--tta",
         action=argparse.BooleanOptionalAction,
-        default=False,
+        default=True,
         help="Do you want to use test time augmentations?"
+    )
+    parser.add_argument(
+        "-n",
+        "--niftis",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Do you want to save the output as nifti?"
     )
     parser.add_argument(
         "-w",
@@ -193,7 +204,7 @@ def main():
 
     accelerator, devices, _ = check_gpu()
 
-    predict(data=data, metadata=metadata, task=args.task, accelerator=accelerator, devices=devices, results=results, tta=args.tta, weights=args.weights)
+    predict(data=data, metadata=metadata, task=args.task, accelerator=accelerator, devices=devices, results=results, tta=args.tta, weights=args.weights, niftis=args.niftis)
 
 if __name__=="__main__":
     main()

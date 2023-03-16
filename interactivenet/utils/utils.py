@@ -16,6 +16,7 @@ import uuid
 import pickle
 
 from monai.transforms import AsDiscrete
+from interactivenet.utils.postprocessing import ApplyPostprocessing
 
 def save_niftis(mlflow, outputs:list, postprocessing:str):
     argmax = AsDiscrete(argmax=True)
@@ -28,11 +29,14 @@ def save_niftis(mlflow, outputs:list, postprocessing:str):
 
         pred = argmax(pred)
         pred = ApplyPostprocessing(pred, postprocessing)
-        
+        pred = pred[0] # Get out of channel
+
         tmp_dir.mkdir(parents=True, exist_ok=True)
         data_file = tmp_dir / f"{name}.nii.gz"
 
-        output = nib.Nifti1Image(pred, meta["affine"])
+        output = nib.Nifti1Image(to_array(pred), to_array(meta["affine"]))
+
+        nib.save(output, str(data_file))
         mlflow.log_artifact(str(data_file), artifact_path="niftis")
         data_file.unlink()
     
