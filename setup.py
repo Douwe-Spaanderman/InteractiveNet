@@ -8,6 +8,7 @@ setup(
     author='Biomedical Imaging Group Rotterdam (BIGR)',
     author_email='d.spaanderman@erasmusmc.nl',
     packages=find_packages(include=['interactivenet', 'interactivenet.*']),
+    python_requires='>3.9.0',
     install_requires=[
         "SimpleITK>=2.1.1.2",
         "GeodisTK>=0.1.7",
