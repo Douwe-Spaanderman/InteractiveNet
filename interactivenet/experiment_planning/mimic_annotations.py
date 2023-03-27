@@ -320,7 +320,7 @@ class MaskedItem(object):
         )
         self._save_Image(
             self._to_simpleITK(self.NewMask),
-            str(location / f"interaction{mode}" / self.AnnotationName),
+            str(location / f"interactions{mode}" / self.AnnotationName),
         )
 
         # Uncomment processed mask for dev
@@ -370,7 +370,7 @@ def create_sample(
     newmask = data.combine_to_map(overlap)
     # Saving data
     if save:
-        for folder in [f"images{mode}", f"interaction{mode}", f"labels{mode}"]:
+        for folder in [f"images{mode}", f"interactions{mode}", f"labels{mode}"]:
             tmp = save / folder
             tmp.mkdir(parents=True, exist_ok=True)
 
