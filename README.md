@@ -118,10 +118,18 @@ Additional options for all three above scripts can be found under ```-h``` or ``
 
 ## Inference
 
+Inference can be run for new samples, for this you don't need to adhere to the original format. Inference can be run using:
+```
+interactivenet_inference -t TaskXXX_YOURTASK -i PATH_TO_IMAGES -in PATH_TO_INTERACTION -o PATH_TO_OUTPUT
+```
+
+Additional options can be found under ```-h``` or ```--help```.
+
 # GUI
 
 # Roadmap 
 - [ ] Example of running InteractiveNet
+- [ ] Easy access to pretrained model and dev option for newly trained models
 - [ ] Support lower memory graphic cards for high dimensional CT data
 - [ ] Support multi-modality input
 - [ ] Support multi labels, and multi interactions

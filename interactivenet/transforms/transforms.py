@@ -170,14 +170,17 @@ class AddDirectoryd(MapTransform):
         d = dict(data)
 
         for key in self.keys:
-            if isinstance(self.directory, os.PathLike):
-                value = self.directory / d[key]
-            elif self.directory.endswith("/"):
-                value = self.directory + "/" + d[key]
+            if self.directory:
+                if isinstance(self.directory, os.PathLike):
+                    value = self.directory / d[key]
+                elif self.directory.endswith("/"):
+                    value = self.directory + "/" + d[key]
+                else:
+                    value = self.directory + d[key]
             else:
-                value = self.directory + d[key]
+                value = d[key]
 
-            if self.convert_to_pathlib:
+            if self.convert_to_pathlib and value != "":
                 value = Path(value)
 
             d[key] = value

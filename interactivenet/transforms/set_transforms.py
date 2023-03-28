@@ -21,7 +21,9 @@ from monai.transforms import (
     RandAdjustContrastd,
     RandZoomd,
     RandRotated,
-    CopyItemsd
+    CopyItemsd,
+    EnsureTyped,
+    MeanEnsembled,
 )
 
 from interactivenet.transforms.transforms import (
@@ -231,9 +233,12 @@ def inference_transforms(
             logscale=True,
             ct=metadata["Fingerprint"]["CT"],
         ),
+    ]
+
+    transforms += [
         CastToTyped(keys=["image", "interaction"], dtype=(np.float32, np.float32)),
-        ToTensord(keys=["interaction"]),
+        ToTensord(keys=["image", "interaction"]),
         ConcatItemsd(keys=["image", "interaction"], name="image"),
     ]
-    
+        
     return Compose(transforms)

@@ -79,6 +79,32 @@ def read_pickle(datapath:Union[str, os.PathLike]):
 
     return objects
 
+def read_data_inference(images:Union[str, os.PathLike], interactions:Union[str, os.PathLike], labels:Optional[Union[str, os.PathLike]]=None):
+    images = to_pathlib(images)
+    interactions = to_pathlib(interactions)
+
+    images = sorted([x for x in images.glob('*.nii.gz') if x.is_file()])
+    interactions = sorted([x for x in interactions.glob('*.nii.gz') if x.is_file()])
+
+    if len(images) != len(interactions):
+        raise ValueError("not the same number files for images and interactions")
+
+    if labels:
+        labels = to_pathlib(labels)
+        labels = sorted([x for x in labels.glob('*.nii.gz') if x.is_file()])
+        if len(images) != len(labels):
+            raise ValueError("not the same number files for images and labels")
+
+        return [
+            {"image": image_path, "interaction": inter_path, "label": label_path, "class": ''}
+            for image_path, inter_path, label_path in zip(images, interactions, labels)
+        ]
+    else:
+        return [
+            {"image": image_path, "interaction": inter_path, "label": '', "class": ''}
+            for image_path, inter_path in zip(images, interactions)
+        ]
+
 def read_dataset(datapath:Union[str, os.PathLike], mode="train", error_message=None):
     datapath = to_pathlib(datapath)
 
