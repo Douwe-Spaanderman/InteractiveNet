@@ -19,7 +19,7 @@ setup(
         "numpy>=1.22.3",
         "Pillow>=9.2.0",
         "psutil>=5.9.0",
-        "pytorch_lightning>=1.5.10",
+        "pytorch_lightning>=1.5.10,<2.0.0",
         "scikit_image>=0.19.2",
         "scikit_learn>=1.1.1",
         "scipy>=1.8.0",
