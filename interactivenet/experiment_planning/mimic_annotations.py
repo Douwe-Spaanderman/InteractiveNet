@@ -100,6 +100,10 @@ class MaskedItem(object):
 
         return check(self.Spacing)
 
+    def check_mask_not_empty(self):
+        if not self.Mask.any():
+            raise ValueError("Mask is empty, i.e. no segmentation is provided, therefore cannot derive synthetic interactions")
+
     def find_border(self, iterations=1) -> None:
         matrix = np.copy(self.ChangedMask)
         matrix = ndimage.binary_erosion(matrix, iterations=iterations).astype(
@@ -342,6 +346,7 @@ def create_sample(
 ):
     data = MaskedItem(input_mask, input_image)
 
+    data.check_mask_not_empty()
     data.get_bbox(pad=[1, 3, 3])
 
     if border:
