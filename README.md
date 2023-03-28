@@ -14,6 +14,13 @@ Inspired by [nnU-Net](https://github.com/MIC-DKFZ/nnUNet), InteractiveNet uses d
 - [Table of Contents](#table-of-contents)
 - [Installation](#installation)
 - [Usage](#usage)
+    - [Running on a new dataset](#Running-on-a-new-dataset)
+    - [Fingerprinting and preprocessing](#Fingerprinting-and-preprocessing)
+    - [MLflow](#MLflow)
+    - [Training](#Training)
+    - [Testing](#Testing)
+    - [Inference](#Inference)
+- [GUI](#GUI)
 - [Roadmap](#roadmap)
 - [Acknowledgements](#acknowledgements)
 
@@ -42,8 +49,8 @@ We recommend installing InteractiveNet in a [virtual environment](https://docs.p
 Interactivenet installs several new commands to your terminal, which are used to run the interactivenet pipeline. All commands have the prefix ```interactivenet_```. All commands have a ```-h``` of ```--help``` option to give you more information on how to use them.
 
 ## Running on a new dataset
-Using InteractiveNet requires you to structure your dataset in a format closely following the data structure of [Medical Segmentation Decthlon](http://medicaldecathlon.com/). How to convert your dataset to be compatible with InteractiveNet can be found [here](documentation/dataset_conversion.md). Also, for InteractiveNet interior margin points are required, if it is not possible to create these interactions manual, we provide options to derive these interactions
-[synthetically](documentation/synthetic_interactions.md)
+For Interactive, interior margin points are required, if it is not possible to create these interactions manual, we provide options to derive these interactions
+[synthetically](documentation/synthetic_interactions.md). Also, using InteractiveNet requires you to structure your dataset in a format closely following the data structure of [Medical Segmentation Decthlon](http://medicaldecathlon.com/). How to convert your dataset to be compatible with InteractiveNet can be found [here](documentation/dataset_conversion.md).
 
 ## Fingerprinting and preprocessing
 InteractiveNet uses fingerprinting of the dataset to determine the best strategy for preprocessing and determines best network configurations. you can run fingerprinting, experiment planning and processing in one go using:
@@ -110,8 +117,6 @@ interactivenet_ensemble -t TaskXXX_YOURTASK
 Additional options for all three above scripts can be found under ```-h``` or ```--help```.
 
 ## Inference
-
-## Running using a pretrained model
 
 # GUI
 
