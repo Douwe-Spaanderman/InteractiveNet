@@ -86,7 +86,7 @@ All experiments results as well as trained models can be found in the interactiv
 
 After training has been run, InteractiveNet can be used to test the data present in imagesTs (and compare to labelsTs if available). Note that you need to adhere to this [format](documentation/dataset_conversion.md).
 
-Testing consists of three parts, identifying best postprocessing (this has to be run ones), running prediction for each fold, and ensembling. **Note that you should only continue when are folds have been trained**. In order to run the complete testing pipeline you can use:
+Testing consists of three parts, identifying best postprocessing (this has to be run ones), running prediction for each fold, and ensembling. **Note that you should only continue when all folds have been trained**. In order to run the complete testing pipeline you can use:
 
 ```
 interactivenet_test -t TaskXXX_YOURTASK
@@ -118,12 +118,14 @@ Additional options for all three above scripts can be found under ```-h``` or ``
 
 ## Inference
 
-Inference can be run for new samples, for this you don't need to adhere to the original format. Inference can be run using:
+The above testing scripts only work for samples in the imagesTs location the defined Task. However, if you want to run inference on new samples, we also provide an additional inference script. For this new samples do not need to adhere to the original format. Inference can be run using:
 ```
 interactivenet_inference -t TaskXXX_YOURTASK -i PATH_TO_IMAGES -in PATH_TO_INTERACTION -o PATH_TO_OUTPUT
 ```
 
-Additional options can be found under ```-h``` or ```--help```.
+The task ID provided in ```-t``` or ```--task``` defines which pipeline will be used for inference, i.e. TaskXXX_YOURTASK defines the preprocessing, trained model and postprocessing steps used for inference. Next, you need to define the folders for the input images, interactions and output segmentations. Note, that the names of images and interactions should match the structure of the images and interactions in TaskXXX_YOURTASK, e.g. in case of two modalities in TaskXXX_YOURTASK, the images should also have two (NAME_XXX_0000, NAME_XXX_0001). 
+
+Aside from the above required arguments for inference. The user is also able to directly compare the results to ground truth labels using ```-l``` or ```--labels``` and log these results in mlflow ```-m``` or ```--log_mlflow```. Similar to testing, this will provide the user with multiple segmentation metric (see above) and images of the segmentations and ground truth. Additional options can be found under ```-h``` or ```--help```.
 
 # GUI
 
