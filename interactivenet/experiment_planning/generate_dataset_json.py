@@ -162,7 +162,7 @@ def main():
     )
     args = parser.parse_args()
 
-    inpath = Path(os.environ["interactiveseg_raw"], args.task)
+    inpath = Path(os.environ["interactivenet_raw"], args.task)
 
     if args.subtypes:
         if Path(inpath / "subtypes.json").exists():

@@ -25,7 +25,7 @@ def main():
     parser.add_argument("-t", "--task", required=True, help="Task name")
     args = parser.parse_args()
 
-    inpath = Path(os.environ["interactiveseg_raw"], args.task)
+    inpath = Path(os.environ["interactivenet_raw"], args.task)
 
     with open(inpath / "subtypes.json") as f:
         subtypes = json.load(f)

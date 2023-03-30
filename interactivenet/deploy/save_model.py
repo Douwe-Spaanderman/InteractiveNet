@@ -63,8 +63,8 @@ def main():
     parser.add_argument("-t", "--task", required=True, type=str, help="Task name")
     args = parser.parse_args()
 
-    exp = Path(os.environ["interactiveseg_processed"], args.task)
-    results = Path(os.environ["interactiveseg_results"], "mlruns")
+    exp = Path(os.environ["interactivenet_processed"], args.task)
+    results = Path(os.environ["interactivenet_results"], "mlruns")
     metadata = read_metadata(exp / "plans.json")
     if 'Cases' in metadata: del metadata['Cases']
     if 'splits' in metadata['Plans']: del metadata['Plans']['splits']
@@ -89,7 +89,7 @@ def main():
 
         postprocessings[fold] = postprocessing
 
-    results = Path(os.environ["interactiveseg_results"], "models", args.task)
+    results = Path(os.environ["interactivenet_results"], "models", args.task)
     results.mkdir(parents=True, exist_ok=True)
 
     print(f"Saving models in {results}")

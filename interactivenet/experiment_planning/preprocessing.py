@@ -28,8 +28,8 @@ class Preprocessing(MonaiDataset):
     ) -> None:
         print("Initializing Preprocessing")
         self.task = task
-        self.raw_path = Path(os.environ["interactiveseg_raw"], task)
-        self.processed_path = Path(os.environ["interactiveseg_processed"], task)
+        self.raw_path = Path(os.environ["interactivenet_raw"], task)
+        self.processed_path = Path(os.environ["interactivenet_processed"], task)
         self.create_directories()
         
         self.data = data
@@ -106,10 +106,10 @@ def main():
     )
     args = parser.parse_args()
 
-    raw_path = Path(os.environ["interactiveseg_raw"], args.task)
+    raw_path = Path(os.environ["interactivenet_raw"], args.task)
     data, modalities = read_dataset(raw_path)
 
-    plans = Path(os.environ["interactiveseg_processed"], args.task, "plans.json")
+    plans = Path(os.environ["interactivenet_processed"], args.task, "plans.json")
     plans = read_metadata(plans, error_message="Please run fingerprinting before processing data.")
 
     preprocess = Preprocessing(

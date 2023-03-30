@@ -71,7 +71,7 @@ class PredictModule(pl.LightningModule):
         self.post_numpy = EnsureType("numpy", device="cpu")
         self.original_size = OriginalSize(metadata["Fingerprint"]["Anisotropic"])
         self.labels = all([idx["label"] != "" for idx in self.data])
-        self.raw = Path(os.environ["interactiveseg_raw"], task)
+        self.raw = Path(os.environ["interactivenet_raw"], task)
 
     def forward(self, x):
         return self._model(x)
@@ -195,9 +195,9 @@ def main():
     )
 
     args = parser.parse_args()
-    raw = Path(os.environ["interactiveseg_raw"], args.task)
-    exp = Path(os.environ["interactiveseg_processed"], args.task)
-    results = Path(os.environ["interactiveseg_results"], "mlruns")
+    raw = Path(os.environ["interactivenet_raw"], args.task)
+    exp = Path(os.environ["interactivenet_processed"], args.task)
+    results = Path(os.environ["interactivenet_results"], "mlruns")
 
     data, modalities = read_dataset(raw, mode="test")
     metadata = read_metadata(exp / "plans.json")

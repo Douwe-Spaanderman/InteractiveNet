@@ -421,7 +421,7 @@ def create_experiment(
     plot: bool = False,
     gif: bool = False,
 ):
-    inpath = Path(os.environ["interactiveseg_raw"], task)
+    inpath = Path(os.environ["interactivenet_raw"], task)
     number_images = 0
     for mode in ["Tr", "Ts"]:
         labels = sorted(

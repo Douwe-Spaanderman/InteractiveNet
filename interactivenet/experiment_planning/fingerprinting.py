@@ -29,8 +29,8 @@ class FingerPrint(object):
     ) -> None:
         print("Initializing Fingerprinting")
         self.task = task
-        self.raw_path = Path(os.environ["interactiveseg_raw"], task)
-        self.processed_path = Path(os.environ["interactiveseg_processed"], task)
+        self.raw_path = Path(os.environ["interactivenet_raw"], task)
+        self.processed_path = Path(os.environ["interactivenet_processed"], task)
         self.processed_path.mkdir(parents=True, exist_ok=True)
 
         self.data = data
@@ -466,7 +466,7 @@ def main():
     if args.seed:
         seed = int(seed)
 
-    raw_path = Path(os.environ["interactiveseg_raw"], args.task)
+    raw_path = Path(os.environ["interactivenet_raw"], args.task)
     data, modalities = read_dataset(raw_path)
 
     fingerprint = FingerPrint(

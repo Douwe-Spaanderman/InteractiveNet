@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 def mlflow_get_runs(name):
-    results = Path(os.environ["interactiveseg_results"], "mlruns")
+    results = Path(os.environ["interactivenet_results"], "mlruns")
     mlflow.set_tracking_uri(results)
 
     experiment_id = mlflow.get_experiment_by_name(name)
@@ -15,7 +15,7 @@ def mlflow_get_runs(name):
     return runs, experiment_id
 
 def mlflow_get_id(name):
-    results = Path(os.environ["interactiveseg_results"], "mlruns")
+    results = Path(os.environ["interactivenet_results"], "mlruns")
     mlflow.set_tracking_uri(results)
 
     experiment_id = mlflow.get_experiment_by_name(name)

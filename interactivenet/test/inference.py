@@ -154,7 +154,7 @@ def infer(
         models = [x for x in deployed_model.glob("model/*") if x.is_dir()]
     else:
         print("Using self-trained model")
-        exp = Path(os.environ["interactiveseg_processed"], task)
+        exp = Path(os.environ["interactivenet_processed"], task)
         metadata = read_metadata(exp / "plans.json")
 
         models = []

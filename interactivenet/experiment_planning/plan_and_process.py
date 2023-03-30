@@ -60,7 +60,7 @@ def main():
     if args.seed:
         seed = int(seed)
 
-    raw_path = Path(os.environ["interactiveseg_raw"], args.task)
+    raw_path = Path(os.environ["interactivenet_raw"], args.task)
     data, modalities = read_dataset(raw_path)
 
     fingerprint = FingerPrint(

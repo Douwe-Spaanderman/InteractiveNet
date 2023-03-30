@@ -186,8 +186,8 @@ if __name__=="__main__":
     )
 
     args = parser.parse_args()
-    exp = os.environ["interactiveseg_processed"]
-    raw = Path(os.environ["interactiveseg_raw"], args.task)
+    exp = os.environ["interactivenet_processed"]
+    raw = Path(os.environ["interactivenet_raw"], args.task)
 
     from interactivenet.utils.utils import read_metadata, read_data, read_types, read_nifti
     data = read_data(raw, test=True)

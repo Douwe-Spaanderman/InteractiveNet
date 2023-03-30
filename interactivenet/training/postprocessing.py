@@ -186,8 +186,8 @@ def main():
     parser.add_argument("-t", "--task", required=True, type=str, help="Task name")
     args = parser.parse_args()
 
-    exp = Path(os.environ["interactiveseg_processed"], args.task)
-    results = Path(os.environ["interactiveseg_results"], "mlruns")
+    exp = Path(os.environ["interactivenet_processed"], args.task)
+    results = Path(os.environ["interactivenet_results"], "mlruns")
 
     data = read_processed(exp)
     metadata = read_metadata(exp / "plans.json")
