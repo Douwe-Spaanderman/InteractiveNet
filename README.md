@@ -20,6 +20,8 @@ Inspired by [nnU-Net](https://github.com/MIC-DKFZ/nnUNet), InteractiveNet uses d
     - [Training](#Training)
     - [Testing](#Testing)
     - [Inference](#Inference)
+- [Deploy](#Deploy)
+- [Pretrained model](#Pretrained-model)
 - [GUI](#GUI)
 - [Roadmap](#roadmap)
 - [Acknowledgements](#acknowledgements)
@@ -126,6 +128,21 @@ interactivenet_inference -t TaskXXX_YOURTASK -i PATH_TO_IMAGES -in PATH_TO_INTER
 The task ID provided in ```-t``` or ```--task``` defines which pipeline will be used for inference, i.e. TaskXXX_YOURTASK defines the preprocessing, trained model and postprocessing steps used for inference. Next, you need to define the folders for the input images, interactions and output segmentations. Note, that the names of images and interactions should match the structure of the images and interactions in TaskXXX_YOURTASK, e.g. in case of two modalities in TaskXXX_YOURTASK, the images should also have two (NAME_XXX_0000, NAME_XXX_0001). 
 
 Aside from the above required arguments for inference. The user is also able to directly compare the results to ground truth labels using ```-l``` or ```--labels``` and log these results in mlflow ```-m``` or ```--log_mlflow```. Similar to testing, this will provide the user with multiple segmentation metric (see above) and images of the segmentations and ground truth. Additional options can be found under ```-h``` or ```--help```.
+
+## Deploy
+
+Trained models can be deployed, by saving all the necessary files. This includes the model weights, preprocessing and postprocessing decisions. By using the following command:
+```
+interactivenet_deploy -t TaskXXX_YOURTASK
+```
+
+A new folder will be made in the specified ```interactivenet_results``` folder named according to the TaskXXX_YOURTASK, which includes everything needed to run the pipeline. You can share this folder with whoever you like and they will be able to run your trained models!
+
+In order to run your deployed models, simply use ```interactive_inference``` as described above.
+
+# Pretrained model
+
+Due to the blinded nature of journal reviewing process, we cannot currently share the pretrained models, as they are on our institute gdrive, however we will do so when the paper is accepted. 
 
 # GUI
 

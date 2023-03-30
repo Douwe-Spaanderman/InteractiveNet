@@ -126,7 +126,6 @@ class InferenceModule(pl.LightningModule):
 def infer(
     data:List[Dict[str, str]], 
     save:str,
-    metadata:dict, 
     task:str,
     results:Optional[Union[str, os.PathLike]],
     accelerator:Optional[str],
@@ -136,28 +135,46 @@ def infer(
     log_mlflow:bool=False
     ):
     # Get model
-    mlflow.set_tracking_uri(results)
-    runs, experiment_id = mlflow_get_runs(task)
-
     if accelerator == "gpu":
         accelerator = "cuda"
 
-    models = []
-    postprocessings = []
-    for idx, run in runs.iterrows():
-        if run["tags.Mode"] != "training":
-            continue
+    mlflow.set_tracking_uri(results / "mlruns")
+    runs, experiment_id = mlflow_get_runs(task)
 
-        run_id = run["run_id"]
-        fold = run["params.fold"]
-        postprocessing = Path(run["artifact_uri"].split('file://')[-1], "postprocessing.json")
-        postprocessing = read_metadata(postprocessing, error_message="postprocessing hasn't been run yet, please do this before predictions")
-        if postprocessing["using_checkpoint"]:
-            models.append("runs:/" + run_id + "/model_checkpoint")
-        else:
-            models.append("runs:/" + run_id + "/model")
+    # Check if models in results / models
+    deployed_model = results / "models" / task
+    if deployed_model.is_dir():
+        print("Using deployed/pretrained model")
 
-        postprocessings.append(postprocessing["postprocessing"])
+        metadata = read_metadata(deployed_model / "plans.json")
+
+        postprocessing = read_metadata(deployed_model / "postprocessings.json", error_message="no postprocessing file found, this is a weird error message for a deployed model...")
+        postprocessings = [x["postprocessing"] for x in postprocessing.values()]
+
+        models = [x for x in deployed_model.glob("model/*") if x.is_dir()]
+    else:
+        print("Using self-trained model")
+        exp = Path(os.environ["interactiveseg_processed"], task)
+        metadata = read_metadata(exp / "plans.json")
+
+        models = []
+        postprocessings = []
+        for idx, run in runs.iterrows():
+            if run["tags.Mode"] != "training":
+                continue
+
+            run_id = run["run_id"]
+            fold = run["params.fold"]
+            postprocessing = Path(run["artifact_uri"].split('file://')[-1], "postprocessing.json")
+            postprocessing = read_metadata(postprocessing, error_message="postprocessing hasn't been run yet, please do this before predictions")
+            if postprocessing["using_checkpoint"]:
+                models.append("runs:/" + run_id + "/model_checkpoint")
+            else:
+                models.append("runs:/" + run_id + "/model")
+
+            postprocessings.append(postprocessing["postprocessing"])
+
+    postprocessing = Counter(postprocessings).most_common()[0][0]
 
     network = InferenceModule(data=data, metadata=metadata, models=models, accelerator=accelerator, tta=tta)
 
@@ -174,8 +191,6 @@ def infer(
     argmax = AsDiscrete(argmax=True)
     save = Path(save)
     save.mkdir(parents=True, exist_ok=True)
-    postprocessing = Counter(postprocessing).most_common()[0][0]
-
     labels = isinstance(outputs[0][2]["label"][0], np.ndarray) or isinstance(outputs[0][2]["label"][0], torch.Tensor)
     if not log_mlflow:
         if labels:
@@ -207,7 +222,7 @@ def infer(
 
 def main():
     parser = argparse.ArgumentParser(
-            description="Ensembling of predicted weights"
+            description="Inference on the interactivenet network"
          )
     parser.add_argument("-t", "--task", required=True, type=str, help="Task name, defines which model and preprocessing is used (REQUIRED)")
     parser.add_argument(
@@ -263,17 +278,14 @@ def main():
     
     args = parser.parse_args()
     raw = Path(os.environ["interactiveseg_raw"], args.task)
-    exp = Path(os.environ["interactiveseg_processed"], args.task)
-    results = Path(os.environ["interactiveseg_results"], "mlruns")
+    results = Path(os.environ["interactiveseg_results"])
 
     accelerator, devices, _ = check_gpu()
 
     data = read_data_inference(images=args.input, interactions=args.interactions, labels=args.labels)
-    metadata = read_metadata(exp / "plans.json")
 
     infer(
         data=data, 
-        metadata=metadata, 
         task=args.task,
         results=results,
         accelerator=accelerator,

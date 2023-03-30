@@ -40,6 +40,9 @@ setup(
             'interactivenet_inference=interactivenet.test.inference:main',
             'interactivenet_predict=interactivenet.test.predict:main',
             'interactivenet_test=interactivenet.test.run:main',
+            'interactivenet_deploy=interactivenet.deploy.save_model:main',
+            'interactivenet_available_models=interactivenet.deploy.print_models:main',
+            'interactivenet_download_model=interactivenet.deploy.download_model:main',
             ]
     },
     keywords=[
