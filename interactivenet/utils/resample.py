@@ -8,7 +8,10 @@ import numpy.linalg as npl
 
 from interactivenet.utils.utils import to_array
 
-def resample_label(label:Union[np.ndarray, torch.Tensor], shape:List[int], anisotrophy_flag:bool):
+
+def resample_label(
+    label: Union[np.ndarray, torch.Tensor], shape: List[int], anisotrophy_flag: bool
+):
     reshaped = np.zeros(shape, dtype=np.uint8)
     n_class = np.max(label)
     if anisotrophy_flag:
@@ -58,7 +61,10 @@ def resample_label(label:Union[np.ndarray, torch.Tensor], shape:List[int], aniso
     reshaped = np.expand_dims(reshaped, 0)
     return reshaped
 
-def resample_image(image:Union[np.ndarray, torch.Tensor], shape:List[int], anisotrophy_flag:bool):
+
+def resample_image(
+    image: Union[np.ndarray, torch.Tensor], shape: List[int], anisotrophy_flag: bool
+):
     resized_channels = []
     if anisotrophy_flag:
         for image_c in image:
@@ -101,28 +107,38 @@ def resample_image(image:Union[np.ndarray, torch.Tensor], shape:List[int], aniso
     resized = np.stack(resized_channels, axis=0)
     return resized
 
-def resample_interaction(image:Union[np.ndarray, torch.Tensor], affine:Union[np.ndarray, torch.Tensor], new_spacing:List[float], shape:List[int]):
+
+def resample_interaction(
+    image: Union[np.ndarray, torch.Tensor],
+    affine: Union[np.ndarray, torch.Tensor],
+    new_spacing: List[float],
+    shape: List[int],
+):
     resized_channels = []
     # Sanitize input
     affine = to_array(affine)
     for image_d in to_array(image):
         resized = np.zeros(shape)
-        new_affine = affines.rescale_affine(affine, image_d.shape, new_spacing, new_shape=shape)
-        
+        new_affine = affines.rescale_affine(
+            affine, image_d.shape, new_spacing, new_shape=shape
+        )
+
         inds_x, inds_y, inds_z = np.where(image_d > 0.5)
         for i, j, k in zip(inds_x, inds_y, inds_z):
             old_vox2new_vox = npl.inv(new_affine).dot(affine)
-            new_point = np.rint(affines.apply_affine(old_vox2new_vox, [i, j, k])).astype(int)
-        
+            new_point = np.rint(
+                affines.apply_affine(old_vox2new_vox, [i, j, k])
+            ).astype(int)
+
             for i in range(len(new_point)):
                 if new_point[i] < 0:
                     new_point[i] = 0
                 elif new_point[i] >= shape[i]:
-                    new_point[i] = shape[i] - 1 
+                    new_point[i] = shape[i] - 1
 
             resized[new_point[0], new_point[1], new_point[2]] = 1
-        
+
         resized_channels.append(resized)
-        
+
     resized = np.stack(resized_channels, axis=0)
     return resized

@@ -1,12 +1,9 @@
 from pathlib import Path
 import argparse
 import os
-from typing import List, Tuple, Dict, Sequence, Optional, Callable, Union, Any
-import pickle
-import json
+from typing import List, Dict, Optional, Union
 import numpy as np
 import torch
-import uuid
 from collections import Counter
 
 import matplotlib.pyplot as plt
@@ -24,28 +21,52 @@ from monai.transforms import (
     DivisiblePadd,
     CastToTyped,
     EnsureType,
-    MeanEnsemble
+    MeanEnsemble,
 )
 
 from interactivenet.transforms.transforms import (
-    Resamplingd, 
-    EGDMapd, 
-    BoudingBoxd, 
-    NormalizeValuesd, 
+    Resamplingd,
+    EGDMapd,
+    BoudingBoxd,
+    NormalizeValuesd,
     OriginalSize,
-    TestTimeFlipping
+    TestTimeFlipping,
 )
 
 from monai.data import Dataset, DataLoader, decollate_batch
-from monai.metrics import compute_meandice, compute_average_surface_distance, compute_hausdorff_distance
+from monai.metrics import (
+    compute_meandice,
+    compute_average_surface_distance,
+    compute_hausdorff_distance,
+)
 
 import nibabel as nib
-from interactivenet.transforms.transforms import Resamplingd, EGDMapd, BoudingBoxd, NormalizeValuesd
+from interactivenet.transforms.transforms import (
+    Resamplingd,
+    EGDMapd,
+    BoudingBoxd,
+    NormalizeValuesd,
+)
 from interactivenet.utils.visualize import ImagePlot
 from interactivenet.utils.results import AnalyzeResults
-from interactivenet.utils.statistics import ResultPlot, ComparePlot, CalculateScores, CalculateClinicalFeatures
+from interactivenet.utils.statistics import (
+    ResultPlot,
+    ComparePlot,
+    CalculateScores,
+    CalculateClinicalFeatures,
+)
 from interactivenet.transforms.set_transforms import inference_transforms
-from interactivenet.utils.utils import save_weights, save_niftis, read_metadata, read_types, read_nifti, read_dataset, check_gpu, read_data_inference, to_array
+from interactivenet.utils.utils import (
+    save_weights,
+    save_niftis,
+    read_metadata,
+    read_types,
+    read_nifti,
+    read_dataset,
+    check_gpu,
+    read_data_inference,
+    to_array,
+)
 from interactivenet.utils.mlflow import mlflow_get_runs, mlflow_get_id
 from interactivenet.utils.postprocessing import ApplyPostprocessing
 
@@ -55,20 +76,26 @@ import pytorch_lightning as pl
 import mlflow.pytorch
 from mlflow.utils.mlflow_tags import MLFLOW_PARENT_RUN_ID
 
+
 class InferenceModule(pl.LightningModule):
     def __init__(
-        self, 
-        data:List[Dict[str, str]], 
-        metadata:dict, 
-        models:List[str],
-        accelerator:Optional[str]="cuda",
-        tta:bool=True
-        ):
+        self,
+        data: List[Dict[str, str]],
+        metadata: dict,
+        models: List[str],
+        accelerator: Optional[str] = "cuda",
+        tta: bool = True,
+    ):
         super().__init__()
         if accelerator == "gpu":
             accelerator = "cuda"
 
-        self._model = torch.nn.ModuleList([mlflow.pytorch.load_model(model, map_location=torch.device(accelerator)) for model in models])
+        self._model = torch.nn.ModuleList(
+            [
+                mlflow.pytorch.load_model(model, map_location=torch.device(accelerator))
+                for model in models
+            ]
+        )
         self.data = data
         self.metadata = metadata
         self.tta = tta
@@ -83,12 +110,15 @@ class InferenceModule(pl.LightningModule):
         transforms = inference_transforms(metadata=self.metadata, labels=self.labels)
 
         self.predict_ds = Dataset(
-            data=self.data, transform=transforms,
+            data=self.data,
+            transform=transforms,
         )
 
     def predict_dataloader(self):
         predict_loader = DataLoader(
-            self.predict_ds, batch_size=1, shuffle=False,
+            self.predict_ds,
+            batch_size=1,
+            shuffle=False,
             num_workers=1,
         )
         return predict_loader
@@ -103,7 +133,7 @@ class InferenceModule(pl.LightningModule):
 
                 image = flip(image)
                 output = self.forward(image, model)
-                
+
                 flip.back = True
                 output = flip(output)
                 outputs.append(ensembling(output))
@@ -118,22 +148,27 @@ class InferenceModule(pl.LightningModule):
         else:
             outputs = [self.post_numpy(i) for i in decollate_batch(outputs)]
 
-        meta = [self.post_numpy(i) for i in decollate_batch(batch["interaction_meta_dict"])]
-        outputs = [self.original_size(output, meta) for output, meta in zip(outputs, meta)]
+        meta = [
+            self.post_numpy(i) for i in decollate_batch(batch["interaction_meta_dict"])
+        ]
+        outputs = [
+            self.original_size(output, meta) for output, meta in zip(outputs, meta)
+        ]
 
         return outputs, meta, batch
 
+
 def infer(
-    data:List[Dict[str, str]], 
-    save:str,
-    task:str,
-    results:Optional[Union[str, os.PathLike]],
-    accelerator:Optional[str],
-    devices:Optional[str],
-    tta:bool=True,
-    weights:bool=False,
-    log_mlflow:bool=False
-    ):
+    data: List[Dict[str, str]],
+    save: str,
+    task: str,
+    results: Optional[Union[str, os.PathLike]],
+    accelerator: Optional[str],
+    devices: Optional[str],
+    tta: bool = True,
+    weights: bool = False,
+    log_mlflow: bool = False,
+):
     # Get model
     if accelerator == "gpu":
         accelerator = "cuda"
@@ -148,7 +183,10 @@ def infer(
 
         metadata = read_metadata(deployed_model / "plans.json")
 
-        postprocessing = read_metadata(deployed_model / "postprocessings.json", error_message="no postprocessing file found, this is a weird error message for a deployed model...")
+        postprocessing = read_metadata(
+            deployed_model / "postprocessings.json",
+            error_message="no postprocessing file found, this is a weird error message for a deployed model...",
+        )
         postprocessings = [x["postprocessing"] for x in postprocessing.values()]
 
         models = [x for x in deployed_model.glob("model/*") if x.is_dir()]
@@ -164,9 +202,14 @@ def infer(
                 continue
 
             run_id = run["run_id"]
-            fold = run["params.fold"]
-            postprocessing = Path(run["artifact_uri"].split('file://')[-1], "postprocessing.json")
-            postprocessing = read_metadata(postprocessing, error_message="postprocessing hasn't been run yet, please do this before predictions")
+            run["params.fold"]
+            postprocessing = Path(
+                run["artifact_uri"].split("file://")[-1], "postprocessing.json"
+            )
+            postprocessing = read_metadata(
+                postprocessing,
+                error_message="postprocessing hasn't been run yet, please do this before predictions",
+            )
             if postprocessing["using_checkpoint"]:
                 models.append("runs:/" + run_id + "/model_checkpoint")
             else:
@@ -176,7 +219,9 @@ def infer(
 
     postprocessing = Counter(postprocessings).most_common()[0][0]
 
-    network = InferenceModule(data=data, metadata=metadata, models=models, accelerator=accelerator, tta=tta)
+    network = InferenceModule(
+        data=data, metadata=metadata, models=models, accelerator=accelerator, tta=tta
+    )
 
     # Required to log artifacts
     trainer = pl.Trainer(
@@ -191,19 +236,23 @@ def infer(
     argmax = AsDiscrete(argmax=True)
     save = Path(save)
     save.mkdir(parents=True, exist_ok=True)
-    labels = isinstance(outputs[0][2]["label"][0], np.ndarray) or isinstance(outputs[0][2]["label"][0], torch.Tensor)
+    labels = isinstance(outputs[0][2]["label"][0], np.ndarray) or isinstance(
+        outputs[0][2]["label"][0], torch.Tensor
+    )
     if not log_mlflow:
         if labels:
-            print("We found labels, but logging in mlflow was false, so we are not measuring overlap, please adjust mlflow argument if you wish to calculate overlap")
+            print(
+                "We found labels, but logging in mlflow was false, so we are not measuring overlap, please adjust mlflow argument if you wish to calculate overlap"
+            )
 
         for output in outputs:
-            name = Path(output[1][0]["filename_or_obj"]).name.split('.')[0]
+            name = Path(output[1][0]["filename_or_obj"]).name.split(".")[0]
             pred = output[0][0]
             meta = output[1][0]
-                
+
             pred = argmax(pred)
             pred = ApplyPostprocessing(pred, postprocessing)
-            pred = pred[0] # Get out of channel
+            pred = pred[0]  # Get out of channel
 
             data_file = save / f"{name}.nii.gz"
 
@@ -213,52 +262,65 @@ def infer(
         experiment_id = mlflow_get_id("Inference")
         with mlflow.start_run(experiment_id=experiment_id, run_name=save.name) as run:
             save_niftis(mlflow, outputs, postprocessing=postprocessing)
-            
+
             if weights:
                 save_weights(mlflow, outputs)
 
             if labels:
-                AnalyzeResults(mlflow=mlflow, outputs=outputs, postprocessing=postprocessing, metadata=metadata, labels=network.labels)
+                AnalyzeResults(
+                    mlflow=mlflow,
+                    outputs=outputs,
+                    postprocessing=postprocessing,
+                    metadata=metadata,
+                    labels=network.labels,
+                )
+
 
 def main():
     parser = argparse.ArgumentParser(
-            description="Inference on the interactivenet network"
-         )
-    parser.add_argument("-t", "--task", required=True, type=str, help="Task name, defines which model and preprocessing is used (REQUIRED)")
+        description="Inference on the interactivenet network"
+    )
+    parser.add_argument(
+        "-t",
+        "--task",
+        required=True,
+        type=str,
+        help="Task name, defines which model and preprocessing is used (REQUIRED)",
+    )
     parser.add_argument(
         "-i",
         "--input",
-        required=True, 
+        required=True,
         type=str,
-        help="Path to input images for inference (REQUIRED)"
+        help="Path to input images for inference (REQUIRED)",
     )
     parser.add_argument(
         "-in",
         "--interactions",
-        required=True, 
+        required=True,
         type=str,
-        help="Path to interactions for inference (REQUIRED)"
+        help="Path to interactions for inference (REQUIRED)",
     )
     parser.add_argument(
         "-o",
         "--output",
-        required=True, 
+        required=True,
         type=str,
-        help="Path to save predictions (REQUIRED)"
+        help="Path to save predictions (REQUIRED)",
     )
     parser.add_argument(
         "-a",
         "--tta",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Do you want to use test time augmentations?"
+        help="Do you want to use test time augmentations?",
     )
     parser.add_argument(
         "-w",
         "--weights",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Do you want to save raw weights as .npy?"
+        help="Do you want to save raw weights as .npy?",
     )
     parser.add_argument(
         "-l",
@@ -266,26 +328,28 @@ def main():
         nargs="?",
         default=None,
         type=str,
-        help="If you have ground truth segmentation, provide Path to folder here"
+        help="If you have ground truth segmentation, provide Path to folder here",
     )
     parser.add_argument(
         "-m",
         "--log_mlflow",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Do you want MLflow instead to log the results (This has extra features, when labels are also provided)?"
+        help="Do you want MLflow instead to log the results (This has extra features, when labels are also provided)?",
     )
-    
+
     args = parser.parse_args()
-    raw = Path(os.environ["interactiveseg_raw"], args.task)
+    Path(os.environ["interactiveseg_raw"], args.task)
     results = Path(os.environ["interactiveseg_results"])
 
     accelerator, devices, _ = check_gpu()
 
-    data = read_data_inference(images=args.input, interactions=args.interactions, labels=args.labels)
+    data = read_data_inference(
+        images=args.input, interactions=args.interactions, labels=args.labels
+    )
 
     infer(
-        data=data, 
+        data=data,
         task=args.task,
         results=results,
         accelerator=accelerator,
@@ -293,8 +357,9 @@ def main():
         tta=args.tta,
         save=args.output,
         weights=args.weights,
-        log_mlflow=args.log_mlflow
+        log_mlflow=args.log_mlflow,
     )
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     main()

@@ -1,21 +1,22 @@
 import torch
 import numpy as np
-from monai.transforms import (
-    Compose,
-    KeepLargestConnectedComponent,
-    FillHoles
-)
+from monai.transforms import Compose, KeepLargestConnectedComponent, FillHoles
+
 
 def ApplyPostprocessing(output, method):
     if method == "fillholes":
         postprocessing = FillHoles(applied_labels=None, connectivity=2)
     elif method == "largestcomponent":
-        postprocessing = KeepLargestConnectedComponent(applied_labels=None, connectivity=2)
+        postprocessing = KeepLargestConnectedComponent(
+            applied_labels=None, connectivity=2
+        )
     elif method == "fillholes_and_largestcomponent":
-        postprocessing = Compose([
-            FillHoles(applied_labels=None, connectivity=2),
-            KeepLargestConnectedComponent(applied_labels=None, connectivity=2)
-        ])
+        postprocessing = Compose(
+            [
+                FillHoles(applied_labels=None, connectivity=2),
+                KeepLargestConnectedComponent(applied_labels=None, connectivity=2),
+            ]
+        )
     else:
         return output
 

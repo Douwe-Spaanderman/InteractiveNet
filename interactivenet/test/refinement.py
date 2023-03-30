@@ -8,8 +8,6 @@
 from pathlib import Path
 import numpy as np
 import os
-import pickle
-import json
 import matplotlib.pyplot as plt
 import uuid
 
@@ -27,19 +25,19 @@ from monai.transforms import (
     CastToTyped,
     EnsureType,
     MeanEnsemble,
-    Activationsd
+    Activationsd,
 )
 
 from monai.data import Dataset, DataLoader, decollate_batch
 
 from interactivenet.transforms.transforms import (
-    Resamplingd, 
-    EGDMapd, 
-    BoudingBoxd, 
-    NormalizeValuesd, 
+    Resamplingd,
+    EGDMapd,
+    BoudingBoxd,
+    NormalizeValuesd,
     OriginalSize,
     TestTimeFlipping,
-    LoadWeightsd
+    LoadWeightsd,
 )
 from interactivenet.utils.visualize import ImagePlot
 from interactivenet.utils.statistics import ResultPlot, CalculateScores
@@ -52,13 +50,16 @@ import numpymaxflow
 import mlflow.pytorch
 from mlflow.utils.mlflow_tags import MLFLOW_PARENT_RUN_ID
 
+
 class Refinement(pl.LightningModule):
     def __init__(self, data, metadata):
         super().__init__()
         self.data = data
         self.metadata = metadata
         self.post_numpy = EnsureType("numpy", device="cpu")
-        self.original_size = OriginalSize(metadata["Fingerprint"]["Anisotropic"], resample=False)
+        self.original_size = OriginalSize(
+            metadata["Fingerprint"]["Anisotropic"], resample=False
+        )
 
     def forward(self, x):
         return None
@@ -73,10 +74,7 @@ class Refinement(pl.LightningModule):
                     keys=["weights"],
                     ref_image="image",
                 ),
-                Activationsd(
-                    keys=["weights"],
-                    softmax=True
-                ),
+                Activationsd(keys=["weights"], softmax=True),
                 EnsureChannelFirstd(keys=["image", "annotation"]),
                 BoudingBoxd(
                     keys=["image", "annotation", "weights"],
@@ -100,17 +98,23 @@ class Refinement(pl.LightningModule):
                     ct=self.metadata["Fingerprint"]["CT"],
                     backup=True,
                 ),
-                CastToTyped(keys=["image", "annotation", "weights"], dtype=(np.float32, np.float32, np.float32)),
+                CastToTyped(
+                    keys=["image", "annotation", "weights"],
+                    dtype=(np.float32, np.float32, np.float32),
+                ),
             ]
         )
 
         self.predict_ds = Dataset(
-            data=self.data, transform=test_transforms,
+            data=self.data,
+            transform=test_transforms,
         )
 
     def predict_dataloader(self):
         predict_loader = DataLoader(
-            self.predict_ds, batch_size=1, shuffle=False,
+            self.predict_ds,
+            batch_size=1,
+            shuffle=False,
             num_workers=4,
         )
         return predict_loader
@@ -150,46 +154,51 @@ class Refinement(pl.LightningModule):
         output = output.astype(int)
         output = np.stack([~output + 2, output])[None, :]
 
-        meta = [self.post_numpy(i) for i in decollate_batch(batch["annotation_meta_dict"])]
-        output = [self.original_size(output, meta) for output, meta in zip(output, meta)]
-       
-        return output, meta
-        #return output, img, meta
+        meta = [
+            self.post_numpy(i) for i in decollate_batch(batch["annotation_meta_dict"])
+        ]
+        output = [
+            self.original_size(output, meta) for output, meta in zip(output, meta)
+        ]
 
-if __name__=="__main__":
+        return output, meta
+        # return output, img, meta
+
+
+if __name__ == "__main__":
     import argparse
     import os
 
-    parser = argparse.ArgumentParser(
-            description="Preprocessing of "
-         )
+    parser = argparse.ArgumentParser(description="Preprocessing of ")
     parser.add_argument(
-        "-t",
-        "--task",
-        nargs="?",
-        default="Task710_STTMRI",
-        help="Task name"
+        "-t", "--task", nargs="?", default="Task710_STTMRI", help="Task name"
     )
     parser.add_argument(
         "-c",
         "--classes",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Do you want to splits classes"
+        help="Do you want to splits classes",
     )
     parser.add_argument(
         "-n",
         "--save_nifti",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Do you want to save the output as nifti?"
+        help="Do you want to save the output as nifti?",
     )
 
     args = parser.parse_args()
     exp = os.environ["interactivenet_processed"]
     raw = Path(os.environ["interactivenet_raw"], args.task)
 
-    from interactivenet.utils.utils import read_metadata, read_data, read_types, read_nifti
+    from interactivenet.utils.utils import (
+        read_metadata,
+        read_data,
+        read_types,
+        read_nifti,
+    )
+
     data = read_data(raw, test=True)
     raw_data = read_data(raw)
     raw_data = read_nifti(raw_data)
@@ -198,6 +207,7 @@ if __name__=="__main__":
     metadata = read_metadata(metadata)
 
     from interactivenet.utils.mlflow import mlflow_get_runs
+
     runs, experiment_id = mlflow_get_runs(args.task)
 
     if args.classes:
@@ -209,24 +219,28 @@ if __name__=="__main__":
     for idx, run in runs.iterrows():
         if run["tags.Mode"] != "ensemble":
             continue
-        
+
         experiment = Path(run["artifact_uri"].split("//")[-1])
         weights = experiment / "weights"
         if weights.is_dir():
             weights = sorted([x for x in weights.glob("*.npz")])
         else:
-            raise ValueError("No weights are available to refine, please use ensemble with -w or --weights to save outputs as weights")
+            raise ValueError(
+                "No weights are available to refine, please use ensemble with -w or --weights to save outputs as weights"
+            )
 
-        data = [dict(d, **{'weights':weight}) for d, weight in zip(data, weights)]
+        data = [dict(d, **{"weights": weight}) for d, weight in zip(data, weights)]
 
         method = Refinement(data, metadata)
 
         trainer = pl.Trainer(
             gpus=0,
         )
-        
-        with mlflow.start_run(experiment_id=experiment_id, run_name="refinement") as run:
-            mlflow.set_tag('Mode', 'refinement')
+
+        with mlflow.start_run(
+            experiment_id=experiment_id, run_name="refinement"
+        ) as run:
+            mlflow.set_tag("Mode", "refinement")
 
             outputs = trainer.predict(model=method)
 
@@ -248,19 +262,26 @@ if __name__=="__main__":
             tmp_dir.mkdir(parents=True, exist_ok=True)
             for output, meta in outputs:
                 output, meta = output[0], meta[0]
-                name = Path(meta["filename_or_obj"]).name.split('.')[0]
+                name = Path(meta["filename_or_obj"]).name.split(".")[0]
 
                 image = raw_data[name]["image"]
                 label = raw_data[name]["masks"]
 
                 output = ApplyPostprocessing(output, "fillholes_and_largestcomponent")
 
-                f = ImagePlot(image, label, additional_scans=[output[1]], CT=metadata["Fingerprint"]["CT"])
+                f = ImagePlot(
+                    image,
+                    label,
+                    additional_scans=[output[1]],
+                    CT=metadata["Fingerprint"]["CT"],
+                )
                 mlflow.log_figure(f, f"images/{name}.png")
 
-                label = to_discrete(label[None,:])
+                label = to_discrete(label[None, :])
 
-                dice, hausdorff_distance, surface_distance = CalculateScores(output, label)
+                dice, hausdorff_distance, surface_distance = CalculateScores(
+                    output, label
+                )
                 dices[name] = dice.item()
                 hausdorff[name] = hausdorff_distance.item()
                 surface[name] = surface_distance.item()

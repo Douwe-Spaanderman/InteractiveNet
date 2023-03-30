@@ -1,10 +1,14 @@
-from typing import Union, Dict, Type
+from typing import Union, Dict
 
 import pandas as pd
 import numpy as np
 import torch
 
-from monai.metrics import compute_meandice, compute_average_surface_distance, compute_hausdorff_distance
+from monai.metrics import (
+    compute_meandice,
+    compute_average_surface_distance,
+    compute_hausdorff_distance,
+)
 
 from interactivenet.utils.utils import to_torch, to_array, to_sitk
 
@@ -14,7 +18,12 @@ import matplotlib.pyplot as plt
 import SimpleITK as sitk
 from radiomics.shape import RadiomicsShape
 
-def CalculateScores(pred:Union[np.ndarray, torch.Tensor], mask:Union[np.ndarray, torch.Tensor], include_background:bool=False):
+
+def CalculateScores(
+    pred: Union[np.ndarray, torch.Tensor],
+    mask: Union[np.ndarray, torch.Tensor],
+    include_background: bool = False,
+):
     if isinstance(pred, np.ndarray):
         pred = to_torch(pred)
 
@@ -25,36 +34,56 @@ def CalculateScores(pred:Union[np.ndarray, torch.Tensor], mask:Union[np.ndarray,
     mask_shape = mask.shape
 
     if not pred_shape == mask_shape:
-        raise ValueError(f"Please provide equal sized tensors for comparing predictions and grounth truth, not {pred_shape} and {mask_shape}")
+        raise ValueError(
+            f"Please provide equal sized tensors for comparing predictions and grounth truth, not {pred_shape} and {mask_shape}"
+        )
 
     if len(pred_shape) == 3:
         if include_background == True:
-            print('adding empty channel HWD -> CHWD')
+            print("adding empty channel HWD -> CHWD")
             pred = pred[None, :]
             mask = mask[None, :]
             pred_shape = pred.shape
         else:
-            raise ValueError(f"Predictions have shape {pred} and background == False, so should include atleast 2 channels (CHWD)")
+            raise ValueError(
+                f"Predictions have shape {pred} and background == False, so should include atleast 2 channels (CHWD)"
+            )
 
     if len(pred_shape) == 4:
-        print('adding empty batch CHWD -> BCHWD')
+        print("adding empty batch CHWD -> BCHWD")
         pred = pred[None, :]
         mask = mask[None, :]
     elif len(pred_shape) != 5:
-        raise ValueError(f"Unrecognized number of channels {pred_shape}, either provide HWD, CHWD or BCHWD")
+        raise ValueError(
+            f"Unrecognized number of channels {pred_shape}, either provide HWD, CHWD or BCHWD"
+        )
 
     dice = compute_meandice(pred, mask, include_background=include_background)
-    hausdorff_distance = compute_hausdorff_distance(pred, mask, include_background=include_background)
-    surface_distance = compute_average_surface_distance(pred, mask, include_background=include_background)
+    hausdorff_distance = compute_hausdorff_distance(
+        pred, mask, include_background=include_background
+    )
+    surface_distance = compute_average_surface_distance(
+        pred, mask, include_background=include_background
+    )
 
     return dice, hausdorff_distance, surface_distance
 
-def CalculateClinicalFeatures(image:Union[np.ndarray, torch.Tensor], pred:Union[np.ndarray, torch.Tensor], mask:Union[np.ndarray, torch.Tensor], meta:Dict):
+
+def CalculateClinicalFeatures(
+    image: Union[np.ndarray, torch.Tensor],
+    pred: Union[np.ndarray, torch.Tensor],
+    mask: Union[np.ndarray, torch.Tensor],
+    meta: Dict,
+):
     if pred.shape != mask.shape:
-        raise ValueError(f"Please provide equal sized arrays for comparing predictions and grounth truth, not {pred.shape} and {mask.shape}")
+        raise ValueError(
+            f"Please provide equal sized arrays for comparing predictions and grounth truth, not {pred.shape} and {mask.shape}"
+        )
 
     if len(image.shape) != len(pred.shape) or len(image.shape) != len(mask.shape):
-        raise ValueError(f"Please provide equal sized arrays for comparing predictions, grounth truth, and image, not {pred.shape}, {mask.shape} and {image.shape}")
+        raise ValueError(
+            f"Please provide equal sized arrays for comparing predictions, grounth truth, and image, not {pred.shape}, {mask.shape} and {image.shape}"
+        )
 
     if len(image.shape) == 4:
         image = image[0]
@@ -69,18 +98,24 @@ def CalculateClinicalFeatures(image:Union[np.ndarray, torch.Tensor], pred:Union[
     features_gt = RadiomicsShape(image, mask)
 
     diameters_pred = {
-        "Slice (axial)" : features_pred.getMaximum2DDiameterSliceFeatureValue(),
-        "Column (coronal)" : features_pred.getMaximum2DDiameterColumnFeatureValue(),
-        "Row (sagittal)" : features_pred.getMaximum2DDiameterRowFeatureValue(),
+        "Slice (axial)": features_pred.getMaximum2DDiameterSliceFeatureValue(),
+        "Column (coronal)": features_pred.getMaximum2DDiameterColumnFeatureValue(),
+        "Row (sagittal)": features_pred.getMaximum2DDiameterRowFeatureValue(),
     }
 
     diameters_gt = {
-        "Slice (axial)" : features_gt.getMaximum2DDiameterSliceFeatureValue(),
-        "Column (coronal)" : features_gt.getMaximum2DDiameterColumnFeatureValue(),
-        "Row (sagittal)" : features_gt.getMaximum2DDiameterRowFeatureValue(),
+        "Slice (axial)": features_gt.getMaximum2DDiameterSliceFeatureValue(),
+        "Column (coronal)": features_gt.getMaximum2DDiameterColumnFeatureValue(),
+        "Row (sagittal)": features_gt.getMaximum2DDiameterRowFeatureValue(),
     }
-    
-    return features_pred.getMeshVolumeFeatureValue(), features_gt.getMeshVolumeFeatureValue(), diameters_pred, diameters_gt,
+
+    return (
+        features_pred.getMeshVolumeFeatureValue(),
+        features_gt.getMeshVolumeFeatureValue(),
+        diameters_pred,
+        diameters_gt,
+    )
+
 
 def ResultPlot(data, scorename="Dice", types=False, unseen=False):
     custom_params = {"axes.spines.right": False, "axes.spines.top": False}
@@ -93,20 +128,28 @@ def ResultPlot(data, scorename="Dice", types=False, unseen=False):
     data = data.reset_index()
 
     if types:
-        data['Types'] = data['Names'].map(types)
+        data["Types"] = data["Names"].map(types)
         if unseen:
-            data['Seen in training'] = data['Types'].map(unseen)
-            data.loc[data['Seen in training'] != False, 'Seen in training'] = True
-            sns.boxplot(x="Types", y=scorename, hue="Seen in training", dodge=False, data=data, ax=ax)
+            data["Seen in training"] = data["Types"].map(unseen)
+            data.loc[data["Seen in training"] != False, "Seen in training"] = True
+            sns.boxplot(
+                x="Types",
+                y=scorename,
+                hue="Seen in training",
+                dodge=False,
+                data=data,
+                ax=ax,
+            )
         else:
             sns.boxplot(x="Types", y=scorename, data=data, ax=ax)
     else:
         sns.boxplot(y=scorename, data=data, ax=ax)
 
-    plt.xticks(rotation = 45, ha="right", rotation_mode="anchor")
-    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    plt.xticks(rotation=45, ha="right", rotation_mode="anchor")
+    ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
     plt.tight_layout()
     return fig
+
 
 def ComparePlot(data, hue=False):
     custom_params = {"axes.spines.right": False, "axes.spines.top": False}
@@ -123,7 +166,7 @@ def ComparePlot(data, hue=False):
     else:
         sns.scatterplot(x="GT", y="Pred", data=data, linewidth=0, ax=ax)
 
-    plt.xticks(rotation = 45, ha="right", rotation_mode="anchor")
-    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    plt.xticks(rotation=45, ha="right", rotation_mode="anchor")
+    ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
     plt.tight_layout()
     return fig

@@ -4,7 +4,6 @@ import argparse
 import numpy as np
 import warnings
 from pathlib import Path
-from random import sample
 import SimpleITK as sitk
 
 

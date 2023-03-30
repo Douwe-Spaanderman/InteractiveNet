@@ -102,7 +102,9 @@ class MaskedItem(object):
 
     def check_mask_not_empty(self):
         if not self.Mask.any():
-            raise ValueError("Mask is empty, i.e. no segmentation is provided, therefore cannot derive synthetic interactions")
+            raise ValueError(
+                "Mask is empty, i.e. no segmentation is provided, therefore cannot derive synthetic interactions"
+            )
 
     def find_border(self, iterations=1) -> None:
         matrix = np.copy(self.ChangedMask)
@@ -372,7 +374,7 @@ def create_sample(
     if center_point:
         overlap.append(data.center_point())
 
-    newmask = data.combine_to_map(overlap)
+    data.combine_to_map(overlap)
     # Saving data
     if save:
         for folder in [f"images{mode}", f"interactions{mode}", f"labels{mode}"]:

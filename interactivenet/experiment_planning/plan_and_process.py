@@ -7,8 +7,11 @@ from interactivenet.experiment_planning.fingerprinting import FingerPrint
 from interactivenet.experiment_planning.preprocessing import Preprocessing
 from interactivenet.transforms.set_transforms import processing_transforms
 
+
 def main():
-    parser = argparse.ArgumentParser(description="InteractiveNet fingerprinting, experiment planning and procesing")
+    parser = argparse.ArgumentParser(
+        description="InteractiveNet fingerprinting, experiment planning and procesing"
+    )
     parser.add_argument("-t", "--task", required=True, type=str, help="Task name")
     parser.add_argument(
         "-f",
@@ -88,6 +91,7 @@ def main():
         verbose=args.verbose,
     )
     preprocess()
+
 
 if __name__ == "__main__":
     main()

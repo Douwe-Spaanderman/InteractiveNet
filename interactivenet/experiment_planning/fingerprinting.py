@@ -1,5 +1,5 @@
 from typing import List, Dict, Tuple, Union
-from pathlib import Path, PosixPath
+from pathlib import Path
 import math
 import random
 import json
@@ -229,7 +229,6 @@ class FingerPrint(object):
         self.intensity_std.append(np.std(points))
 
     def get_kernels_strides(self, sizes, spacings):
-        input_size = sizes
         strides, kernels = [], []
         while True:
             spacing_ratio = [sp / min(spacings) for sp in spacings]
