@@ -23,8 +23,6 @@ Inspired by [nnU-Net](https://github.com/MIC-DKFZ/nnUNet), InteractiveNet uses d
 - [Deploy](#Deploy)
 - [Pretrained model](#Pretrained-model)
 - [GUI](#GUI)
-- [Roadmap](#roadmap)
-- [Acknowledgements](#acknowledgements)
 
 # Installation
 InteractiveNet has been tested on Linux (Ubuntu 20.04, and centOS), and MacOS (Big Sur). We do not provide support for other operating systems.
@@ -145,11 +143,3 @@ In order to run your deployed models, simply use ```interactive_inference``` as 
 Due to the blinded nature of journal reviewing process, we cannot currently share the pretrained models, as they are on our institute gdrive, however we will do so when the paper is accepted. 
 
 # GUI
-
-# Roadmap 
-- [ ] Example of running InteractiveNet
-- [ ] Easy access to pretrained model and dev option for newly trained models
-- [ ] Support lower memory graphic cards for high dimensional CT data
-- [ ] Support multi-modality input
-- [ ] Support multi labels, and multi interactions
-- [ ] Resample label back instead of weights
