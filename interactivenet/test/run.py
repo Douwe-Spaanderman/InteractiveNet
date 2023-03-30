@@ -5,10 +5,7 @@ import os
 from pathlib import Path
 
 from interactivenet.utils.utils import (
-    save_weights,
     read_metadata,
-    read_types,
-    read_nifti,
     read_dataset,
     check_gpu,
     read_processed,

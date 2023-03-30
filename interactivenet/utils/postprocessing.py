@@ -1,4 +1,3 @@
-import torch
 import numpy as np
 from monai.transforms import Compose, KeepLargestConnectedComponent, FillHoles
 

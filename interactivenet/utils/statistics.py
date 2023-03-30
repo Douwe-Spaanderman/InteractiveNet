@@ -10,12 +10,11 @@ from monai.metrics import (
     compute_hausdorff_distance,
 )
 
-from interactivenet.utils.utils import to_torch, to_array, to_sitk
+from interactivenet.utils.utils import to_torch, to_sitk
 
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-import SimpleITK as sitk
 from radiomics.shape import RadiomicsShape
 
 

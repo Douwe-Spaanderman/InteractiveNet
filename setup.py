@@ -26,7 +26,7 @@ setup(
         "seaborn>=0.12.2",
         "pyradiomics>=3.0.1"
     ],
-    setup_requires=['pytest', 'black', 'setuptools'],
+    setup_requires=['pytest', 'black', 'autoflake', 'setuptools'],
     entry_points={
         'console_scripts': [
             'interactivenet_mimic_interactions=interactivenet.experiment_planning.mimic_annotations:main',

@@ -3,7 +3,6 @@ from typing import Optional, Sequence, Union
 
 import torch
 import torch.nn as nn
-import numpy as np
 
 
 class UNet(nn.Module):

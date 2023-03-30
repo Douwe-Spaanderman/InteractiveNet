@@ -2,79 +2,16 @@ from pathlib import Path
 import argparse
 import os
 import json
-import numpy as np
-import torch
 import shutil
 
-import matplotlib.pyplot as plt
 
-from monai.utils import set_determinism
-from monai.transforms import (
-    AsDiscrete,
-    Compose,
-    ToTensord,
-    Compose,
-    LoadImaged,
-    ConcatItemsd,
-    EnsureChannelFirstd,
-    NormalizeIntensityd,
-    DivisiblePadd,
-    CastToTyped,
-    EnsureType,
-    MeanEnsemble,
-)
-
-from interactivenet.transforms.transforms import (
-    Resamplingd,
-    EGDMapd,
-    BoudingBoxd,
-    NormalizeValuesd,
-    OriginalSize,
-    TestTimeFlipping,
-)
-
-from monai.data import Dataset, DataLoader, decollate_batch
-from monai.metrics import (
-    compute_meandice,
-    compute_average_surface_distance,
-    compute_hausdorff_distance,
-)
-
-import nibabel as nib
-from interactivenet.transforms.transforms import (
-    Resamplingd,
-    EGDMapd,
-    BoudingBoxd,
-    NormalizeValuesd,
-)
-from interactivenet.utils.visualize import ImagePlot
-from interactivenet.utils.results import AnalyzeResults
-from interactivenet.utils.statistics import (
-    ResultPlot,
-    ComparePlot,
-    CalculateScores,
-    CalculateClinicalFeatures,
-)
-from interactivenet.transforms.set_transforms import inference_transforms
 from interactivenet.utils.utils import (
-    save_weights,
-    save_niftis,
     read_metadata,
-    read_types,
-    read_nifti,
-    read_dataset,
-    check_gpu,
-    read_data_inference,
-    to_array,
 )
-from interactivenet.utils.mlflow import mlflow_get_runs, mlflow_get_id
-from interactivenet.utils.postprocessing import ApplyPostprocessing
+from interactivenet.utils.mlflow import mlflow_get_runs
 
-import torch
-import pytorch_lightning as pl
 
 import mlflow.pytorch
-from mlflow.utils.mlflow_tags import MLFLOW_PARENT_RUN_ID
 
 
 def main():

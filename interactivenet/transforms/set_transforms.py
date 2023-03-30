@@ -8,13 +8,11 @@ from monai.transforms import (
     LoadImaged,
     EnsureChannelFirstd,
     DivisiblePadd,
-    AsDiscrete,
     Compose,
     RandFlipd,
     RandScaleIntensityd,
     ConcatItemsd,
     ToTensord,
-    SpatialPadd,
     RandGaussianNoised,
     RandGaussianSmoothd,
     CastToTyped,
@@ -22,8 +20,6 @@ from monai.transforms import (
     RandZoomd,
     RandRotated,
     CopyItemsd,
-    EnsureTyped,
-    MeanEnsembled,
 )
 
 from interactivenet.transforms.transforms import (

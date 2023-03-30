@@ -7,47 +7,27 @@ from pathlib import Path
 import argparse
 import os
 import numpy as np
-import torch
 import warnings
 from collections import Counter
 
-import matplotlib.pyplot as plt
 
 import mlflow.pytorch
 
-from monai.transforms import AsDiscrete, VoteEnsemble, MeanEnsemble
-from monai.metrics import (
-    compute_meandice,
-    compute_average_surface_distance,
-    compute_hausdorff_distance,
-)
+from monai.transforms import MeanEnsemble
 
-from interactivenet.utils.visualize import ImagePlot
-from interactivenet.utils.statistics import (
-    ResultPlot,
-    ComparePlot,
-    CalculateScores,
-    CalculateClinicalFeatures,
-)
 from interactivenet.utils.results import AnalyzeResults
-from interactivenet.utils.resample import resample_label
 from interactivenet.utils.utils import (
     read_metadata,
-    read_types,
     read_nifti,
     read_dataset,
-    check_gpu,
     save_niftis,
     save_weights,
     read_pickle,
 )
 from interactivenet.utils.mlflow import mlflow_get_runs
 
-import torch
-import pytorch_lightning as pl
 
 import mlflow.pytorch
-from mlflow.utils.mlflow_tags import MLFLOW_PARENT_RUN_ID
 
 
 def read_prediction(

@@ -1,7 +1,6 @@
 from typing import List, Dict
 
 from pathlib import Path
-import numpy as np
 import os
 import argparse
 
@@ -13,8 +12,6 @@ from monai.losses import DiceCELoss
 from monai.data import Dataset, DataLoader, decollate_batch
 
 from interactivenet.transforms.set_transforms import training_transforms
-from interactivenet.transforms.transforms import LoadPreprocessed
-from interactivenet.networks.unet import UNet
 
 import torch
 import pytorch_lightning as pl

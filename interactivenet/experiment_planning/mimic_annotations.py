@@ -1,6 +1,5 @@
 import os
 import random
-import itertools
 import warnings
 import json
 import argparse

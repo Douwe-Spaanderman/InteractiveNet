@@ -5,7 +5,6 @@ from pathlib import Path
 from interactivenet.utils.utils import read_dataset
 from interactivenet.experiment_planning.fingerprinting import FingerPrint
 from interactivenet.experiment_planning.preprocessing import Preprocessing
-from interactivenet.transforms.set_transforms import processing_transforms
 
 
 def main():

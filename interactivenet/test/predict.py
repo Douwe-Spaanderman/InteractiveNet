@@ -4,21 +4,8 @@ import os
 from typing import List, Dict, Optional, Union
 
 from pathlib import Path
-import numpy as np
-import matplotlib.pyplot as plt
 
-from monai.utils import set_determinism
 from monai.transforms import (
-    AsDiscrete,
-    Compose,
-    ToTensord,
-    Compose,
-    LoadImaged,
-    ConcatItemsd,
-    EnsureChannelFirstd,
-    NormalizeIntensityd,
-    DivisiblePadd,
-    CastToTyped,
     EnsureType,
     MeanEnsemble,
 )
@@ -26,24 +13,15 @@ from monai.transforms import (
 from monai.data import Dataset, DataLoader, decollate_batch
 
 from interactivenet.transforms.transforms import (
-    Resamplingd,
-    EGDMapd,
-    BoudingBoxd,
-    NormalizeValuesd,
     OriginalSize,
     TestTimeFlipping,
 )
 from interactivenet.transforms.set_transforms import inference_transforms
-from interactivenet.utils.visualize import ImagePlot
-from interactivenet.utils.statistics import ResultPlot, CalculateScores
-from interactivenet.utils.postprocessing import ApplyPostprocessing
 from interactivenet.utils.results import AnalyzeResults
 from interactivenet.utils.utils import (
     save_weights,
     save_niftis,
     read_metadata,
-    read_types,
-    read_nifti,
     read_dataset,
     check_gpu,
 )

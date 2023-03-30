@@ -15,40 +15,31 @@ from monai.utils import set_determinism
 from monai.transforms import (
     AsDiscrete,
     Compose,
-    ToTensord,
     Compose,
     LoadImaged,
-    ConcatItemsd,
     EnsureChannelFirstd,
-    NormalizeIntensityd,
-    DivisiblePadd,
     CastToTyped,
     EnsureType,
-    MeanEnsemble,
     Activationsd,
 )
 
 from monai.data import Dataset, DataLoader, decollate_batch
 
 from interactivenet.transforms.transforms import (
-    Resamplingd,
     EGDMapd,
     BoudingBoxd,
     NormalizeValuesd,
     OriginalSize,
-    TestTimeFlipping,
     LoadWeightsd,
 )
 from interactivenet.utils.visualize import ImagePlot
 from interactivenet.utils.statistics import ResultPlot, CalculateScores
 from interactivenet.utils.postprocessing import ApplyPostprocessing
 
-import torch
 import pytorch_lightning as pl
 import numpymaxflow
 
 import mlflow.pytorch
-from mlflow.utils.mlflow_tags import MLFLOW_PARENT_RUN_ID
 
 
 class Refinement(pl.LightningModule):
