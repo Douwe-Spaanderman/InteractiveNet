@@ -153,9 +153,3 @@ Due to the blinded nature of journal reviewing process, we cannot currently shar
 - [ ] Support multi-modality input
 - [ ] Support multi labels, and multi interactions
 - [ ] Resample label back instead of weights
-
-# Acknowledgements
-
-<img src="BIGR_logo.jpg" width="512px" />
-
-InteractiveNet is developed by the [Biomedical Imaging Group Rotterdam (BIGR)](https://bigr.nl/)
