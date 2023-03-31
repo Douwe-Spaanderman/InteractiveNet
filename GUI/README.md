@@ -24,4 +24,4 @@ Additional options can be found under ```-h``` or ```--help```. Importantly, mon
 
 When the server has been setup, you can use the monailabel to annotate image with six interior margin points, and run the pipeline. An example of this is shown here:
 
-![InteractiveNet_example](InteractiveNet_example.mp4)
+https://user-images.githubusercontent.com/39140958/229098680-5b9ce004-0274-47e9-938b-e2017e68934a.mp4
