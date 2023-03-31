@@ -5,8 +5,6 @@ setup(
     version='1.0.0',
     description='InteractiveNet, a framework for minimally interactive medical image segmentation.',
     url='https://github.com/Douwe-Spaanderman/InteractiveNet',
-    author='Biomedical Imaging Group Rotterdam (BIGR)',
-    author_email='d.spaanderman@erasmusmc.nl',
     packages=find_packages(include=['interactivenet', 'interactivenet.*']),
     python_requires='>3.9.0',
     install_requires=[
@@ -46,7 +44,7 @@ setup(
             ]
     },
     keywords=[
-        "deep learning", 
+        "deep learning",
         "medical image analysis",
         "interactive segmentation",
         "medical image segmentation",
