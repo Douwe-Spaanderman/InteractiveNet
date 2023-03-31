@@ -1,12 +1,9 @@
 import logging
-import os
-import glob
 from typing import Any, Dict, Union
 from collections import Counter
 
 import lib.infers
 import lib.trainers
-from monai.networks.nets import DynUNet
 
 from monailabel.interfaces.config import TaskConfig
 from monailabel.interfaces.tasks.infer import InferTask
@@ -18,7 +15,13 @@ logger = logging.getLogger(__name__)
 
 class InteractiveNet(TaskConfig):
     def init(
-        self, name: str, model_dir: str, conf: Dict[str, str], planner: Any, studies: str, **kwargs
+        self,
+        name: str,
+        model_dir: str,
+        conf: Dict[str, str],
+        planner: Any,
+        studies: str,
+        **kwargs,
     ):
         super().init(name, model_dir, conf, planner, **kwargs)
 
@@ -48,20 +51,20 @@ class InteractiveNet(TaskConfig):
         postprocessing = Counter(postprocessing).most_common()[0][0]
 
         # Model Files
-        #if "ensemble" in name:
+        # if "ensemble" in name:
         #    self.ensemble = True
         #    self.path = [
         #        model for model in (task_dir / "model").glob(f"*") if model.is_dir()
         #    ]
-        #else:
+        # else:
         #    fold = "0"
         #    print(f"using fold {fold} as ensemble is not selected")
         #    self.ensemble = False
         #    self.path = task_dir / "model" / fold
 
-        #if "tta" in name:
+        # if "tta" in name:
         #    self.tta = True
-        #else:
+        # else:
         #    self.tta = False
 
         # All the above commented out code can be used to have a model without tta and ensembling
@@ -69,7 +72,9 @@ class InteractiveNet(TaskConfig):
         self.ensemble = True
         self.tta = True
         self.path = [
-            model / "data" / "model.pth" for model in (task_dir / "model").glob(f"*") if model.is_dir()
+            model / "data" / "model.pth"
+            for model in (task_dir / "model").glob(f"*")
+            if model.is_dir()
         ]
 
         # Need to load model using torch_load -> model._model to get dynunet -> should just adjusted loading of the method :)
@@ -88,7 +93,7 @@ class InteractiveNet(TaskConfig):
             intensity_std=self.intensity_std,
             ct=self.ct,
             labels=self.labels,
-            tmp_folder=self.tmp_folder
+            tmp_folder=self.tmp_folder,
         )
         return task
 

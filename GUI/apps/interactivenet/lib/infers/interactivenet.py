@@ -1,22 +1,17 @@
-from http import client
 import logging
-import numpy as np
 import torch
 import os
-import time
-import json
 
 from typing import Callable, Sequence, Union, Tuple, List
 
 from lib.transforms.transforms import (
     AnnotationToChanneld,
     TestTimeFlippingd,
-    OriginalSized
+    OriginalSized,
 )
 from monai.inferers import Inferer, SimpleInferer
 from monai.data import MetaTensor
 from monai.transforms import (
-    AsDiscreted,
     AddChanneld,
     EnsureTyped,
     LoadImaged,
@@ -45,9 +40,9 @@ from monailabel.interfaces.tasks.infer import InferTask, InferType
 
 logger = logging.getLogger(__name__)
 
-from typing import Any, Dict, Sequence, Tuple
+from typing import Sequence, Tuple
 
-from monailabel.transform.writer import Writer
+
 
 class InteractiveNet(InferTask):
     """ """
@@ -218,7 +213,9 @@ class InteractiveNet(InferTask):
 
                 pred.append(output["label"])
 
-            output["label"] = MetaTensor(torch.stack(pred), affine=output["label"].affine)
+            output["label"] = MetaTensor(
+                torch.stack(pred), affine=output["label"].affine
+            )
         else:
             super().run_inferer(data, convert_to_batch=convert_to_batch, device=device)
 
@@ -240,7 +237,9 @@ class InteractiveNet(InferTask):
             if statbuf and statbuf.st_mtime == cached[1]:
                 network = cached[0]
             elif statbuf:
-                logger.warning(f"Reload model from cache.  Prev ts: {cached[1]}; Current ts: {statbuf.st_mtime}")
+                logger.warning(
+                    f"Reload model from cache.  Prev ts: {cached[1]}; Current ts: {statbuf.st_mtime}"
+                )
 
         if network is None:
             network = torch.load(path, map_location=torch.device(device))

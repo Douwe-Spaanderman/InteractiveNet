@@ -31,22 +31,25 @@ from monailabel.tasks.activelearning.random import Random
 
 logger = logging.getLogger(__name__)
 
+
 class MyApp(MONAILabelApp):
     def __init__(self, app_dir, studies, conf):
         self.model_dir = Path(os.environ["interactivenet_results"], "models")
 
         c = get_class_names(lib.configs, "TaskConfig")
         if len(c) > 1:
-            raise KeyError("Multiple methods were found, I think you adjusted something from the original repo...")
+            raise KeyError(
+                "Multiple methods were found, I think you adjusted something from the original repo..."
+            )
         else:
             c = c[0]
 
         configs = {}
         for name in [x.name for x in self.model_dir.glob("*") if x.is_dir()]:
             configs[name] = c
-            #configs[f"{name}+ensemble"] = c
-            #configs[f"{name}+tta"] = c
-            #configs[f"{name}+ensemble+tta"] = c
+            # configs[f"{name}+ensemble"] = c
+            # configs[f"{name}+tta"] = c
+            # configs[f"{name}+ensemble+tta"] = c
 
         configs = {k: v for k, v in sorted(configs.items())}
 

@@ -10,37 +10,25 @@
 # limitations under the License.
 
 import logging
-import warnings
-import pickle
-import math
-import os
 from itertools import combinations
 
 from monai.transforms.transform import MapTransform, Transform
 from monai.transforms import (
-    NormalizeIntensity,
-    GaussianSmooth,
     Flip,
     AsDiscrete,
-    Activations,
 )
 from monai.data import MetaTensor
 import numpy as np
-import GeodisTK
 
-import numpymaxflow
-from skimage.transform import resize
-from nibabel import affines
-import numpy.linalg as npl
 import torch
 
 from interactivenet.utils.resample import (
     resample_image,
     resample_label,
-    resample_interaction,
 )
 
 logger = logging.getLogger(__name__)
+
 
 class OriginalSized(Transform):
     """
