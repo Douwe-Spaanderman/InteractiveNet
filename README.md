@@ -22,7 +22,7 @@ Inspired by [nnU-Net](https://github.com/MIC-DKFZ/nnUNet), InteractiveNet uses d
     - [Inference](#Inference)
 - [Deploy](#Deploy)
 - [Pretrained model](#Pretrained-model)
-- [GUI](#GUI)
+- [Graphical User Interface](#Graphical-User-Interface)
 
 # Installation
 InteractiveNet has been tested on Linux (Ubuntu 20.04, and centOS), and MacOS (Big Sur). We do not provide support for other operating systems.
@@ -142,4 +142,6 @@ In order to run your deployed models, simply use ```interactive_inference``` as 
 
 Due to the blinded nature of journal reviewing process, we cannot currently share the pretrained models, as they are on our institute gdrive, however we will do so when the paper is accepted. 
 
-# GUI
+# Graphical User Interface
+
+We have implemented the interactive segmentation pipeline in [monailabel](https://github.com/Project-MONAI/MONAILabel). Therefore, you can directly use interactivenet in your slicer/OHIF vierwer. This will allow you to load in samples, make interactions, and run the pretrained segmentation pipeline. Deployed models, as described above, can be used in the Graphical User Interface (GUI). Checkout the [Graphical User Interface](GUI) for more information.
