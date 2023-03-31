@@ -144,4 +144,4 @@ Due to the blinded nature of journal reviewing process, we cannot currently shar
 
 # Graphical User Interface
 
-We have implemented the interactive segmentation pipeline in [monailabel](https://github.com/Project-MONAI/MONAILabel). Therefore, you can directly use interactivenet in your slicer/OHIF vierwer. This will allow you to load in samples, make interactions, and run the pretrained segmentation pipeline. Deployed models, as described above, can be used in the Graphical User Interface (GUI). Checkout the [Graphical User Interface](GUI) for more information.
+We have implemented the interactive segmentation pipeline in [monailabel](https://github.com/Project-MONAI/MONAILabel). Therefore, you can directly use interactivenet in 3D slicer/OHIF vierwer. This will allow you to load in samples, make interactions, and run the pretrained segmentation pipeline. Deployed models, as described above, can be used in the Graphical User Interface (GUI). Checkout the [Graphical User Interface](GUI) for more information.
