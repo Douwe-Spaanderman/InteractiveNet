@@ -21,3 +21,7 @@ monailabel start_server --app apps/interactivenet --studies PATH_TO_DATA --conf 
 You have to define the location of your input images using ```--studies```. These should be in nifti format (.nii, .nii.gz). Next, you can define the models you can select in the viewer for inference, using ```--conf```. Note, that this command always needs to start with ```models```, following the Task ID you want to use for inference. This can be one model (```models TaskXXX_YOURTASK```), multiple models (```models 'TaskXXX_YOURTASK,TaskXXX_OTHERTASK'```), or all available models (```models all```).
 
 Additional options can be found under ```-h``` or ```--help```. Importantly, monailabel does not search for an available port, but standard uses port 8000. If address is already in use, you can use ```-p``` or ```--port``` to define an available port.
+
+When the server has been setup, you can use the monailabel to annotate image with six interior margin points, and run the pipeline. An example of this is shown here:
+
+![InteractiveNet_example](InteractiveNet_example.mp4)
