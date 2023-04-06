@@ -5,7 +5,7 @@ import numpy as np
 import warnings
 from pathlib import Path
 import SimpleITK as sitk
-
+import more_itertools
 
 def sanity_check(images, labels, interactions, mode="Tr"):
     def check(a, b, c=None):
@@ -52,6 +52,9 @@ def get_stats(inpath, all_subtypes=None):
         images = sorted(
             [f for f in Path(inpath, "images" + mode).glob("**/*") if f.is_file()]
         )
+        test = list(more_itertools.chunked(images,2)) #2 still has to be replaced by the number of modalities. Test should then be used instead of images (with a new name of course)
+        import ipdb
+        ipdb.set_trace()
         labels = sorted(
             [f for f in Path(inpath, "labels" + mode).glob("**/*") if f.is_file()]
         )
