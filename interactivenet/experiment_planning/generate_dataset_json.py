@@ -6,8 +6,9 @@ import warnings
 from pathlib import Path
 import SimpleITK as sitk
 import more_itertools
+import re
 
-def sanity_check(images, interactions, labels=None):
+def sanity_check(images, interactions, n_modalities, labels=None):
     def check(a, b, c=None):
         if c:
             return a == b == c
@@ -15,12 +16,20 @@ def sanity_check(images, interactions, labels=None):
             return a == b
 
     len_images = len(images)   
-    image_names = list(set(["_".join(x[0].name.split("_")[:-1]) for x in images]))   
-    image_names_2 = list(set(["_".join(x[1].name.split("_")[:-1]) for x in images]))    
-    if not (image_names==image_names_2):
-        raise ValueError("Different subject names for modalities")
-    interaction_names = list(set([x.with_suffix("").stem for x in interactions]))   
 
+    image_names_old = []
+
+    for mod in range(n_modalities):
+        image_names = list(set(["_".join(x[mod].name.split("_")[:-1]) for x in images])) 
+        if image_names_old: 
+            if not image_names_old == image_names:
+                raise ValueError("Different subject names for modalities")
+            else:
+                image_names_old = image_names
+        else:
+            image_names_old = image_names
+     
+    interaction_names = list(set([x.with_suffix("").stem for x in interactions]))   
 
     if labels:
         label_names = list(set([x.with_suffix("").stem for x in labels]))
@@ -62,6 +71,19 @@ def get_stats(inpath, n_modalities, all_subtypes=None):
         images = sorted(
             [f for f in Path(inpath, "images" + mode).glob("**/*") if f.is_file()]
         )
+
+        mod_number = np.unique([re.split(f'_|.nii',image.name)[-2] for image in images])
+
+        for number in mod_number:
+            if not len(number)==4 and number.is_integer():
+                raise ValueError("Length must be 4 and must contain only integers.")
+
+        #Check whether number of provided modalities matches the number of modalities in the images folder
+        if not n_modalities == len(mod_number):
+            raise ValueError("Amount of modalities does not correspond to the number of modalities in the images folder.")
+        else:
+            n_modalities==len(mod_number)
+
         images = list(more_itertools.chunked(images, n_modalities))
         labels = sorted(
             [f for f in Path(inpath, "labels" + mode).glob("**/*") if f.is_file()]
@@ -73,41 +95,40 @@ def get_stats(inpath, n_modalities, all_subtypes=None):
         if mode == "Ts":
             if not labels:
                 warnings.warn("No labels present for test set")
-                sanity_check(images, interactions)
+                sanity_check(images, interactions, n_modalities)
             else:
-                sanity_check(images, interactions, labels)
+                sanity_check(images, interactions, n_modalities, labels)
         else:
-            sanity_check(images, interactions, labels)
-
-        images_mod_1 = [img[0] for img in images]
-        images_mod_2 = [img[1] for img in images]
+            sanity_check(images, interactions, n_modalities, labels)
     
         if all_subtypes:
             subtypes = [all_subtypes[x.stem.split(".nii")[0]] for x in labels]
             data[mode] = [
                 {
                     
-                    "images": [str(image1.relative_to(inpath)),str(image2.relative_to(inpath))],
+                    "images": [str(image[mod].relative_to(inpath)) for mod in range(n_modalities)],
                     "label": str(label.relative_to(inpath)),
                     "interaction": str(interaction.relative_to(inpath)),
                     "class": subtype,
                 }
-                for image1, image2, label, interaction, subtype in zip(
-                    images_mod_1, images_mod_2, labels, interactions, subtypes
-                )
+                for image, label, interaction, subtype in zip(images, labels, interactions, subtypes
+                ) 
             ]
         else:
             data[mode] = [
                 {
-                    "images": [str(image1.relative_to(inpath)),str(image2.relative_to(inpath))],
+                    "images": [str(image[mod].relative_to(inpath)) for mod in range(n_modalities)],
                     "label": str(label.relative_to(inpath)),
                     "interaction": str(interaction.relative_to(inpath)),
                     "class": "",
                 }
-                for image1, image2, label, interaction in zip(images_mod_1, images_mod_2, labels, interactions)
+                for image, label, interaction in zip(images, labels, interactions)     
             ]
 
         all_labels.extend(labels)
+    
+    import ipdb;
+    ipdb.set_trace()
 
     labels = []
     for label in all_labels:
@@ -116,7 +137,7 @@ def get_stats(inpath, n_modalities, all_subtypes=None):
         labels.extend(list(np.unique(sitk.GetArrayFromImage(label))))
 
     data["labels"] = sorted([*set(labels)])
-    return data
+    return data, mod_number
 
 def main():
     parser = argparse.ArgumentParser(
@@ -188,7 +209,7 @@ def main():
     else:
         subtypes = None
 
-    stats = get_stats(inpath, n_modalities, subtypes)
+    stats, mod_number = get_stats(inpath, n_modalities, subtypes)
 
     if len(args.labels) == len(stats["labels"]):
         labels = {k: v for k, v in zip([*range(len(stats["labels"]))], args.labels)}
@@ -203,9 +224,8 @@ def main():
             f"Non matching labels, as there are {n_labels} found and {args.labels} provided"
         )
     
-    modalities = {k: v for k, v in zip([*range(len(args.modalities))], args.modalities)}
-    import ipdb
-    ipdb.set_trace()
+    modalities = {k: v for k, v in zip(mod_number, args.modalities)}
+
 
     with open(str(inpath / "dataset.json"), "w") as f:
         json.dump(
