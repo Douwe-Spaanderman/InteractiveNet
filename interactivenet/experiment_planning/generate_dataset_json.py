@@ -126,9 +126,6 @@ def get_stats(inpath, n_modalities, all_subtypes=None):
             ]
 
         all_labels.extend(labels)
-    
-    import ipdb;
-    ipdb.set_trace()
 
     labels = []
     for label in all_labels:

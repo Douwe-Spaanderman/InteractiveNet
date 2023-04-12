@@ -49,22 +49,27 @@ class FingerPrint(object):
         self.bbox = []
         self.clipping = []
 
-        if self.modalities["0"].upper() == "CT":
-            self.ct = True
-            self.intensity_mean = []
-            self.intensity_std = []
+        if "0000" in self.modalities.keys():
+            if self.modalities["0000"].upper() == "CT":
+                self.ct = True
+                self.intensity_mean = []
+                self.intensity_std = []
+            else:
+                self.ct = False
+                self.intensity_mean = 0
+                self.intensity_std = 0
         else:
-            self.ct = False
-            self.intensity_mean = 0
-            self.intensity_std = 0
+                self.ct = False
+                self.intensity_mean = 0
+                self.intensity_std = 0
 
     def __call__(self):
         print("Starting Fingerprinting: \n")
         print(f"Path: {self.raw_path}")
 
         for entry in self.data:
-            image, label, interaction, subtype = (
-                entry["image"],
+            images, label, interaction, subtype = (
+                entry["images"],
                 entry["label"],
                 entry["interaction"],
                 entry["class"],
@@ -73,10 +78,12 @@ class FingerPrint(object):
             name = Path(label).name.split(".")[0]
             print(f"File: {name}")
 
-            image = nib.load(self.raw_path / image)
+            images = [nib.load(self.raw_path / image) for image in images]
             label = nib.load(self.raw_path / label)
             inter = nib.load(self.raw_path / interaction)
-            self.sanity_same_metadata(image, label, inter)
+            [self.sanity_same_metadata(image, label, inter) for image in images]
+            
+            image = images[0]
 
             self.dim.append(image.shape)
             spacing = image.header.get_zooms()
