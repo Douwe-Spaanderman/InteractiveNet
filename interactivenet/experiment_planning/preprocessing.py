@@ -16,7 +16,7 @@ class Preprocessing(MonaiDataset):
     def __init__(
         self,
         task: str,
-        data: List[Dict[str, str]],
+        data: List[Dict[str, Union[List, str]]],
         target_spacing: Tuple[float],
         relax_bbox: Union[float, Tuple[float]] = 0.1,
         divisble_using: Union[int, Tuple[int]] = (16, 16, 8),
