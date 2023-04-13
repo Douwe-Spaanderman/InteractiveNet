@@ -34,6 +34,7 @@ def ImagePlot(
     cmap=plt.cm.gray,
     ax=None,
 ):
+
     if not isinstance(GT, list):
         segs = [GT]
     else:
@@ -104,6 +105,7 @@ def ImagePlot(
     if show:
         plt.show()
     if save:
+        print("saving")
         name = save.name
         save = save.parent
         save.mkdir(parents=True, exist_ok=True)

@@ -69,7 +69,7 @@ class FingerPrint(object):
 
         for entry in self.data:
             images, label, interaction, subtype = (
-                entry["images"],
+                entry["image"],
                 entry["label"],
                 entry["interaction"],
                 entry["class"],

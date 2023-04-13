@@ -62,8 +62,6 @@ class Preprocessing(MonaiDataset):
         for i, item in enumerate(self.data):
             name = Path(item["label"]).with_suffix("").stem
             print(f"File: {name}")
-            import ipdb;
-            ipdb.set_trace()
             item = self.__getitem__(i)
             metainfo[name] = self.create_metainfo(item)
             print("")

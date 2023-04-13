@@ -106,7 +106,7 @@ def get_stats(inpath, n_modalities, all_subtypes=None):
             data[mode] = [
                 {
                     
-                    "images": [str(image[mod].relative_to(inpath)) for mod in range(n_modalities)],
+                    "image": [str(image[mod].relative_to(inpath)) for mod in range(n_modalities)],
                     "label": str(label.relative_to(inpath)),
                     "interaction": str(interaction.relative_to(inpath)),
                     "class": subtype,
@@ -117,7 +117,7 @@ def get_stats(inpath, n_modalities, all_subtypes=None):
         else:
             data[mode] = [
                 {
-                    "images": [str(image[mod].relative_to(inpath)) for mod in range(n_modalities)],
+                    "image": [str(image[mod].relative_to(inpath)) for mod in range(n_modalities)],
                     "label": str(label.relative_to(inpath)),
                     "interaction": str(interaction.relative_to(inpath)),
                     "class": "",

@@ -32,7 +32,7 @@ class MaskedItem(object):
         self.RandomPoints = None
         self.ExtremePoints = None
         self.CenterPoints = None
-        self.BoudingBox = None
+        self.BoundingBox = None
         self.NewMask = None
         self.ChangedMask = np.copy(self.Mask)
         self.ShowMask = np.copy(self.Mask)
@@ -75,7 +75,7 @@ class MaskedItem(object):
                 "Unable to assert in bbox as already cropped to bbox, please crop afterwards"
             )
         else:
-            if self.BoudingBox is None:
+            if self.BoundingBox is None:
                 self.get_bbox(pad=[1, 3, 3])
                 warnings.warn(
                     "Bounding box was created on the fly with padding = [1,3,3]"
@@ -83,11 +83,11 @@ class MaskedItem(object):
 
             for point in points:
                 if (
-                    not (self.BoudingBox[0][0] <= point[0] <= self.BoudingBox[1][0])
-                    or not (self.BoudingBox[0][1] <= point[1] <= self.BoudingBox[1][1])
-                    or not (self.BoudingBox[0][2] <= point[2] <= self.BoudingBox[1][2])
+                    not (self.BoundingBox[0][0] <= point[0] <= self.BoundingBox[1][0])
+                    or not (self.BoundingBox[0][1] <= point[1] <= self.BoundingBox[1][1])
+                    or not (self.BoundingBox[0][2] <= point[2] <= self.BoundingBox[1][2])
                 ):
-                    raise KeyError("Points do not fit in bouding box")
+                    raise KeyError("Points do not fit in bounding box")
 
     def _find_point(self, id_z, id_y, id_x, ids):
         sel_id = ids[0][random.randint(0, len(ids[0]) - 1)]
@@ -123,7 +123,7 @@ class MaskedItem(object):
     def get_bbox(self, pad=0) -> None:
         pad_z, pad_y, pad_x = self._assert_pad("bbox", pad)
 
-        self.BoudingBox = np.array(
+        self.BoundingBox = np.array(
             [
                 [
                     np.min(self.inds_z) - pad_z,
@@ -139,30 +139,30 @@ class MaskedItem(object):
         )
 
         # Check all dimensions - remove to small (below zero) and to large (above dimensions)
-        self.BoudingBox[self.BoudingBox < 0] = 0
+        self.BoundingBox[self.BoundingBox < 0] = 0
         largest_dimension = [
             int(x) if x <= self.Dimensions[i] else self.Dimensions[i]
-            for i, x in enumerate(self.BoudingBox[1])
+            for i, x in enumerate(self.BoundingBox[1])
         ]
-        self.BoudingBox = np.array([self.BoudingBox[0].tolist(), largest_dimension])
+        self.BoundingBox = np.array([self.BoundingBox[0].tolist(), largest_dimension])
 
     def crop_from_bbox(self):
         self.ChangedMask = self.ChangedMask[
-            self.BoudingBox[0][0] : self.BoudingBox[1][0],
-            self.BoudingBox[0][1] : self.BoudingBox[1][1],
-            self.BoudingBox[0][2] : self.BoudingBox[1][2],
+            self.BoundingBox[0][0] : self.BoundingBox[1][0],
+            self.BoundingBox[0][1] : self.BoundingBox[1][1],
+            self.BoundingBox[0][2] : self.BoundingBox[1][2],
         ]
         self.ShowMask = self.ShowMask[
-            self.BoudingBox[0][0] : self.BoudingBox[1][0],
-            self.BoudingBox[0][1] : self.BoudingBox[1][1],
-            self.BoudingBox[0][2] : self.BoudingBox[1][2],
+            self.BoundingBox[0][0] : self.BoundingBox[1][0],
+            self.BoundingBox[0][1] : self.BoundingBox[1][1],
+            self.BoundingBox[0][2] : self.BoundingBox[1][2],
         ]
 
         if self.Image is not None:
             self.Image = self.Image[
-                self.BoudingBox[0][0] : self.BoudingBox[1][0],
-                self.BoudingBox[0][1] : self.BoudingBox[1][1],
-                self.BoudingBox[0][2] : self.BoudingBox[1][2],
+                self.BoundingBox[0][0] : self.BoundingBox[1][0],
+                self.BoundingBox[0][1] : self.BoundingBox[1][1],
+                self.BoundingBox[0][2] : self.BoundingBox[1][2],
             ]
 
         self.Cropped = True
@@ -174,9 +174,9 @@ class MaskedItem(object):
                 "Changing the new mask to fit bounding box, please only use for visualization"
             )
             self.NewMask = self.NewMask[
-                self.BoudingBox[0][0] : self.BoudingBox[1][0],
-                self.BoudingBox[0][1] : self.BoudingBox[1][1],
-                self.BoudingBox[0][2] : self.BoudingBox[1][2],
+                self.BoundingBox[0][0] : self.BoundingBox[1][0],
+                self.BoundingBox[0][1] : self.BoundingBox[1][1],
+                self.BoundingBox[0][2] : self.BoundingBox[1][2],
             ]
 
             return self.NewMask
