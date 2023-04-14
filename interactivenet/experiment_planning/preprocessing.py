@@ -53,7 +53,6 @@ class Preprocessing(MonaiDataset):
             ct=self.ct,
             verbose=self.verbose,
         )
-
         super().__init__(self.data, self.transforms)
 
     def __call__(self) -> None:

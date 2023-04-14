@@ -719,12 +719,12 @@ class EGDMapd(MapTransform):
                 image = d[self.image]
 
             if len(d[key].shape) == 4:
-                for idx in range(d[key].shape[0]):
-                    img = image[idx]
+                GD_list = []
+                for img in image: #Assuming interaction never has multiple channels before making the EGD
 
                     GD = GeodisTK.geodesic3d_raster_scan(
                         img.astype(np.float32),
-                        d[key][idx].astype(np.uint8),
+                        d[key][0].astype(np.uint8),
                         spacing.astype(np.float32),
                         self.lamb,
                         self.iter,
@@ -735,7 +735,10 @@ class EGDMapd(MapTransform):
                     if self.logscale == True:
                         GD = np.exp(-GD)
 
-                    d[key][idx, :, :, :] = GD
+                    GD_list.append(GD)
+
+                GD = np.stack(GD_list)
+                d[key] = GD
             else:
                 GD = GeodisTK.geodesic3d_raster_scan(
                     image.astype(np.float32),
@@ -755,7 +758,10 @@ class EGDMapd(MapTransform):
         print(
             f"Geodesic Distance Map with lamd: {self.lamb}, iter: {self.iter} and logscale: {self.logscale}"
         )
+        import ipdb;
+        ipdb.set_trace()
         return d
+        
 
 
 class SavePreprocessed(MapTransform):
@@ -780,14 +786,16 @@ class SavePreprocessed(MapTransform):
             .split("/")[-1]
             .split(".nii.gz")[0]
         )
-
         np.savez(self.save / name, **{key: d[key] for key in self.keys})
 
         pickle_data = {key: d[key] for key in self.meta_keys}
+
+        print(pickle_data["interaction_meta_dict"])
+        print(pickle_data["image_meta_dict"])
+        print("HIERRRRR")
         
         with open(self.save / (name + ".pkl"), "wb") as handle:
             pickle.dump(pickle_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
         return d
 
 
@@ -814,7 +822,6 @@ class LoadPreprocessed(MapTransform):
     def read_pickle(self, filename: Optional[Union[str, os.PathLike]]):
         with open(filename, "rb") as handle:
             b = pickle.load(handle)
-
         return b
 
     def __call__(self, data):
@@ -825,6 +832,10 @@ class LoadPreprocessed(MapTransform):
             if current_data.suffix == ".npz":
                 image_data = np.load(d[key])
                 old_keys = list(image_data.keys())
+                print(image_data["image"].shape)
+                print(image_data["interaction"].shape)
+                print(key)
+                print("HIER")
                 if not len(old_keys) == len(self.new_keys):
                     raise KeyError(
                         "Old keys and new keys do not have the same length in preprocessed data loader"
@@ -862,5 +873,4 @@ class LoadPreprocessed(MapTransform):
                         new_d[new_key] = metadata[old_key]
             else:
                 raise ValueError("Neither npz or pkl in preprocessed loader")
-
         return new_d
