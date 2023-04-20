@@ -27,6 +27,7 @@ def AnalyzeResults(
     classes = {}
     volume = {}
     diameter = {}
+    f = {}
     for output in outputs:
         name = Path(output[1][0]["filename_or_obj"]).name.split(".")[0]
         pred = output[0][0]
@@ -34,16 +35,16 @@ def AnalyzeResults(
         pred = argmax(pred)
         pred = ApplyPostprocessing(pred, postprocessing)
 
-        image = output[2]["image_raw"][0]
+        images = output[2]["image_raw"][0]
         if labels:
             mask = output[2]["label"][0]
-            f = ImagePlot(
-                image[0],
-                mask[0],
-                additional_scans=[pred[0]],
-                CT=metadata["Fingerprint"]["CT"],
-            )
-
+            for idx, image in enumerate(images):
+                f[idx] = ImagePlot(
+                    image,
+                    mask[0],
+                    additional_scans=[pred[0]],
+                    CT=metadata["Fingerprint"]["CT"],
+                )
             pred = discrete(pred)
             mask = discrete(mask)
             dice, hausdorff_distance, surface_distance = CalculateScores(pred, mask)
@@ -57,13 +58,16 @@ def AnalyzeResults(
                 volume_gt,
                 diameter_pred,
                 diameter_gt,
-            ) = CalculateClinicalFeatures(image, pred, mask, output[1][0])
+            ) = CalculateClinicalFeatures(images, pred, mask, output[1][0])
             volume[name] = {"gt": volume_gt, "pred": volume_pred}
             diameter[name] = {"gt": diameter_gt, "pred": diameter_pred}
         else:
-            f = ImagePlot(image[0], output[0], CT=metadata["Fingerprint"]["CT"])
+            for idx, image in enumerate(images):
+                f[idx] = ImagePlot(image, output[0], CT=metadata["Fingerprint"]["CT"])
 
-        mlflow.log_figure(f, f"images/{name}.png")
+        for idx, _ in enumerate(images):      
+            mlflow.log_figure(f[idx], f"images/{name}_{idx}.png")
+            mlflow.log_figure(f[idx], f"images/{name}_{idx}.png")
 
     if labels:
         mlflow.log_metric("Mean dice", np.mean(list(dices.values())))

@@ -758,8 +758,6 @@ class EGDMapd(MapTransform):
         print(
             f"Geodesic Distance Map with lamd: {self.lamb}, iter: {self.iter} and logscale: {self.logscale}"
         )
-        import ipdb;
-        ipdb.set_trace()
         return d
         
 
@@ -789,10 +787,6 @@ class SavePreprocessed(MapTransform):
         np.savez(self.save / name, **{key: d[key] for key in self.keys})
 
         pickle_data = {key: d[key] for key in self.meta_keys}
-
-        print(pickle_data["interaction_meta_dict"])
-        print(pickle_data["image_meta_dict"])
-        print("HIERRRRR")
         
         with open(self.save / (name + ".pkl"), "wb") as handle:
             pickle.dump(pickle_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -832,10 +826,6 @@ class LoadPreprocessed(MapTransform):
             if current_data.suffix == ".npz":
                 image_data = np.load(d[key])
                 old_keys = list(image_data.keys())
-                print(image_data["image"].shape)
-                print(image_data["interaction"].shape)
-                print(key)
-                print("HIER")
                 if not len(old_keys) == len(self.new_keys):
                     raise KeyError(
                         "Old keys and new keys do not have the same length in preprocessed data loader"

@@ -33,7 +33,7 @@ class Net(pl.LightningModule):
         super().__init__()
         self._model = DynUNet(
             spatial_dims=3,
-            in_channels=3,
+            in_channels=metadata["Fingerprint"]["Channels"],
             out_channels=2,
             kernel_size=metadata["Plans"]["kernels"],
             strides=metadata["Plans"]["strides"],
@@ -87,7 +87,7 @@ class Net(pl.LightningModule):
             self.train_ds,
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=0,
+            num_workers=4,
         )
         return train_loader
 
@@ -155,7 +155,7 @@ class Net(pl.LightningModule):
             val_loss += output["val_loss"].sum().item()
             num_items += output["val_number"]
 
-        mean_val_dice = self.dice_metric.aggrate().item()
+        mean_val_dice = self.dice_metric.aggregate().item()
         self.dice_metric.reset()
         mean_val_loss = torch.tensor(val_loss / num_items)
         if mean_val_dice > self.best_val_dice:

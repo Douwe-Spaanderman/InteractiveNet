@@ -396,6 +396,7 @@ class FingerPrint(object):
                 "Median size bbox": self.median_bbox,
                 "Median size resampled": self.median_resampled_shape,
                 "Median final shape": self.median_final_shape,
+                "Channels": len(self.modalities)*2
             },
             "Plans": {
                 "kernels": self.kernels,
