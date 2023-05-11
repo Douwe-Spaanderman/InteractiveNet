@@ -121,7 +121,6 @@ class MaskedItem(object):
         )
         self.ChangedMask = self.ChangedMask - matrix
 
-
     def add_border(self, iterations=1) -> None:
         matrix = np.copy(self.ChangedMask)
         matrix = ndimage.binary_dilation(matrix, iterations=iterations).astype(
