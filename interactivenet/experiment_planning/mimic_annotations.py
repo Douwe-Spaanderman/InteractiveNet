@@ -7,6 +7,7 @@ import SimpleITK as sitk
 import numpy as np
 from pathlib import Path
 from scipy import ndimage
+from skimage.measure import label 
 
 from typing import Union, Optional, List
 
@@ -27,12 +28,13 @@ class MaskedItem(object):
         self.Image = self._from_simpleITK(self.Image)
         self.Anisotropic = self._check_Anisotropic()
         self.Dimensions = self.Mask.shape
-        self.inds_z, self.inds_y, self.inds_x = np.where(self.Mask > 0.5)
         self.Cropped = False
         self.RandomPoints = None
         self.ExtremePoints = None
         self.CenterPoints = None
-        self.BoudingBox = None
+        self.LargestCC = np.copy(self.Mask)
+        self.inds_z, self.inds_y, self.inds_x = np.where(self.Mask > 0.5)
+        self.BoundingBox = None
         self.NewMask = None
         self.ChangedMask = np.copy(self.Mask)
         self.ShowMask = np.copy(self.Mask)
@@ -75,7 +77,7 @@ class MaskedItem(object):
                 "Unable to assert in bbox as already cropped to bbox, please crop afterwards"
             )
         else:
-            if self.BoudingBox is None:
+            if self.BoundingBox is None:
                 self.get_bbox(pad=[1, 3, 3])
                 warnings.warn(
                     "Bounding box was created on the fly with padding = [1,3,3]"
@@ -83,11 +85,11 @@ class MaskedItem(object):
 
             for point in points:
                 if (
-                    not (self.BoudingBox[0][0] <= point[0] <= self.BoudingBox[1][0])
-                    or not (self.BoudingBox[0][1] <= point[1] <= self.BoudingBox[1][1])
-                    or not (self.BoudingBox[0][2] <= point[2] <= self.BoudingBox[1][2])
+                    not (self.BoundingBox[0][0] <= point[0] <= self.BoundingBox[1][0])
+                    or not (self.BoundingBox[0][1] <= point[1] <= self.BoundingBox[1][1])
+                    or not (self.BoundingBox[0][2] <= point[2] <= self.BoundingBox[1][2])
                 ):
-                    raise KeyError("Points do not fit in bouding box")
+                    raise KeyError("Points do not fit in bounding box")
 
     def _find_point(self, id_z, id_y, id_x, ids):
         sel_id = ids[0][random.randint(0, len(ids[0]) - 1)]
@@ -104,6 +106,13 @@ class MaskedItem(object):
             raise ValueError(
                 "Mask is empty, i.e. no segmentation is provided, therefore cannot derive synthetic interactions"
             )
+        
+    def get_largest_CC(self):
+        labels = label(np.copy(self.LargestCC))
+        largestCC = labels == np.argmax(np.bincount(labels.flat)[1:])+1
+        self.LargestCC = np.where(largestCC, self.LargestCC, 0)
+        self.inds_z, self.inds_y, self.inds_x = np.where(self.LargestCC > 0.5)
+    
 
     def find_border(self, iterations=1) -> None:
         matrix = np.copy(self.ChangedMask)
@@ -122,8 +131,7 @@ class MaskedItem(object):
 
     def get_bbox(self, pad=0) -> None:
         pad_z, pad_y, pad_x = self._assert_pad("bbox", pad)
-
-        self.BoudingBox = np.array(
+        self.BoundingBox = np.array(
             [
                 [
                     np.min(self.inds_z) - pad_z,
@@ -139,30 +147,30 @@ class MaskedItem(object):
         )
 
         # Check all dimensions - remove to small (below zero) and to large (above dimensions)
-        self.BoudingBox[self.BoudingBox < 0] = 0
+        self.BoundingBox[self.BoundingBox < 0] = 0
         largest_dimension = [
             int(x) if x <= self.Dimensions[i] else self.Dimensions[i]
-            for i, x in enumerate(self.BoudingBox[1])
+            for i, x in enumerate(self.BoundingBox[1])
         ]
-        self.BoudingBox = np.array([self.BoudingBox[0].tolist(), largest_dimension])
+        self.BoundingBox = np.array([self.BoundingBox[0].tolist(), largest_dimension])
 
     def crop_from_bbox(self):
         self.ChangedMask = self.ChangedMask[
-            self.BoudingBox[0][0] : self.BoudingBox[1][0],
-            self.BoudingBox[0][1] : self.BoudingBox[1][1],
-            self.BoudingBox[0][2] : self.BoudingBox[1][2],
+            self.BoundingBox[0][0] : self.BoundingBox[1][0],
+            self.BoundingBox[0][1] : self.BoundingBox[1][1],
+            self.BoundingBox[0][2] : self.BoundingBox[1][2],
         ]
         self.ShowMask = self.ShowMask[
-            self.BoudingBox[0][0] : self.BoudingBox[1][0],
-            self.BoudingBox[0][1] : self.BoudingBox[1][1],
-            self.BoudingBox[0][2] : self.BoudingBox[1][2],
+            self.BoundingBox[0][0] : self.BoundingBox[1][0],
+            self.BoundingBox[0][1] : self.BoundingBox[1][1],
+            self.BoundingBox[0][2] : self.BoundingBox[1][2],
         ]
 
         if self.Image is not None:
             self.Image = self.Image[
-                self.BoudingBox[0][0] : self.BoudingBox[1][0],
-                self.BoudingBox[0][1] : self.BoudingBox[1][1],
-                self.BoudingBox[0][2] : self.BoudingBox[1][2],
+                self.BoundingBox[0][0] : self.BoundingBox[1][0],
+                self.BoundingBox[0][1] : self.BoundingBox[1][1],
+                self.BoundingBox[0][2] : self.BoundingBox[1][2],
             ]
 
         self.Cropped = True
@@ -174,9 +182,9 @@ class MaskedItem(object):
                 "Changing the new mask to fit bounding box, please only use for visualization"
             )
             self.NewMask = self.NewMask[
-                self.BoudingBox[0][0] : self.BoudingBox[1][0],
-                self.BoudingBox[0][1] : self.BoudingBox[1][1],
-                self.BoudingBox[0][2] : self.BoudingBox[1][2],
+                self.BoundingBox[0][0] : self.BoundingBox[1][0],
+                self.BoundingBox[0][1] : self.BoundingBox[1][1],
+                self.BoundingBox[0][2] : self.BoundingBox[1][2],
             ]
 
             return self.NewMask
@@ -339,6 +347,7 @@ def create_sample(
     extreme_points: Optional[Union[str, List[str]]] = None,
     random_points: Optional[int] = None,
     center_point: bool = False,
+    largest_CC: bool = False,
     scribble: bool = False,
     mode: str = "Tr",
     save: bool = False,
@@ -348,6 +357,10 @@ def create_sample(
     data = MaskedItem(input_mask, input_image)
 
     data.check_mask_not_empty()
+
+    if largest_CC:
+        data.get_largest_CC()
+
     data.get_bbox(pad=[1, 3, 3])
 
     if border:
@@ -418,6 +431,7 @@ def create_experiment(
     extreme_points: Optional[Union[str, List[str]]] = None,
     random_points: Optional[int] = None,
     center_point: bool = False,
+    largest_CC: bool = False,
     scribble: bool = False,
     plot: bool = False,
     gif: bool = False,
@@ -440,6 +454,7 @@ def create_experiment(
                 extreme_points=extreme_points,
                 random_points=random_points,
                 center_point=center_point,
+                largest_CC=largest_CC,
                 scribble=False,
                 mode=mode,
                 save=inpath,
@@ -519,6 +534,13 @@ def main():
         help="Do you want to get the center point",
     )
     parser.add_argument(
+        "-l",
+        "--largest_CC",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="Do you want to use the largest volume",
+    )
+    parser.add_argument(
         "-s",
         "--plot",
         default=False,
@@ -547,6 +569,7 @@ def main():
         extreme_points=args.extreme_points,
         random_points=args.random_points,
         center_point=args.center_point,
+        largest_CC=args.largest_CC,
         scribble=False,  # Not implemented at this time
         plot=args.plot,
         gif=args.gif,

@@ -5,26 +5,40 @@ import numpy as np
 import warnings
 from pathlib import Path
 import SimpleITK as sitk
+import more_itertools
+import re
 
-
-def sanity_check(images, labels, interactions, mode="Tr"):
+def sanity_check(images, interactions, n_modalities, labels=None):
     def check(a, b, c=None):
         if c:
             return a == b == c
         else:
             return a == b
 
-    len_images = len(images)
-    if mode == "Tr":
+    len_images = len(images)   
+
+    image_names_old = []
+
+    for mod in range(n_modalities):
+        image_names = list(set(["_".join(x[mod].name.split("_")[:-1]) for x in images])) 
+        if image_names_old: 
+            if not image_names_old == image_names:
+                raise ValueError("Different subject names for modalities")
+            else:
+                image_names_old = image_names
+        else:
+            image_names_old = image_names
+     
+    interaction_names = list(set([x.with_suffix("").stem for x in interactions]))   
+
+    if labels:
+        label_names = list(set([x.with_suffix("").stem for x in labels]))
+
         if not len(labels) % len_images == len(interactions) % len_images == 0:
             raise AssertionError(
-                "Length of database is not correct, e.g. more labels or interactions than images"
+                "Length of database is not correct, e.g. more labels or interactions than images (or other way around)"
             )
-
-    image_names = list(set(["_".join(x.name.split("_")[:-1]) for x in images]))
-    interaction_names = list(set([x.with_suffix("").stem for x in interactions]))
-    if mode == "Tr":
-        label_names = list(set([x.with_suffix("").stem for x in labels]))
+        
         if (
             all(
                 [
@@ -38,13 +52,18 @@ def sanity_check(images, labels, interactions, mode="Tr"):
                 "images, labels and interactions do not have the correct names or are not ordered"
             )
     else:
+        if not len(interactions) == len_images:
+            raise AssertionError(
+                "Length of database is not correct, e.g. more interactions than images (or other way around)"
+            )
+
         if all([check(a, b) for a, b in zip(image_names, interaction_names)]) == False:
             raise AssertionError(
                 "images and interactions do not have the correct names or are not ordered"
             )
 
 
-def get_stats(inpath, all_subtypes=None):
+def get_stats(inpath, n_modalities, all_subtypes=None):
     all_labels = []
     data = {}
     for mode in ["Ts", "Tr"]:
@@ -52,6 +71,20 @@ def get_stats(inpath, all_subtypes=None):
         images = sorted(
             [f for f in Path(inpath, "images" + mode).glob("**/*") if f.is_file()]
         )
+
+        mod_number = np.unique([re.split(f'_|.nii',image.name)[-2] for image in images])
+
+        for number in mod_number:
+            if not len(number)==4 and number.is_integer():
+                raise ValueError("Length must be 4 and must contain only integers.")
+
+        #Check whether number of provided modalities matches the number of modalities in the images folder
+        if not n_modalities == len(mod_number):
+            raise ValueError("Amount of modalities does not correspond to the number of modalities in the images folder.")
+        else:
+            n_modalities==len(mod_number)
+
+        images = list(more_itertools.chunked(images, n_modalities))
         labels = sorted(
             [f for f in Path(inpath, "labels" + mode).glob("**/*") if f.is_file()]
         )
@@ -62,35 +95,34 @@ def get_stats(inpath, all_subtypes=None):
         if mode == "Ts":
             if not labels:
                 warnings.warn("No labels present for test set")
-                labels = len(images) * [""]
-                sanity_check(images, labels, interactions)
+                sanity_check(images, interactions, n_modalities)
             else:
-                sanity_check(images, labels, interactions, mode="Tr")
+                sanity_check(images, interactions, n_modalities, labels)
         else:
-            sanity_check(images, labels, interactions, mode)
-
+            sanity_check(images, interactions, n_modalities, labels)
+    
         if all_subtypes:
             subtypes = [all_subtypes[x.stem.split(".nii")[0]] for x in labels]
             data[mode] = [
                 {
-                    "image": str(image.relative_to(inpath)),
+                    
+                    "image": [str(image[mod].relative_to(inpath)) for mod in range(n_modalities)],
                     "label": str(label.relative_to(inpath)),
                     "interaction": str(interaction.relative_to(inpath)),
                     "class": subtype,
                 }
-                for image, label, interaction, subtype in zip(
-                    images, labels, interactions, subtypes
-                )
+                for image, label, interaction, subtype in zip(images, labels, interactions, subtypes
+                ) 
             ]
         else:
             data[mode] = [
                 {
-                    "image": str(image.relative_to(inpath)),
+                    "image": [str(image[mod].relative_to(inpath)) for mod in range(n_modalities)],
                     "label": str(label.relative_to(inpath)),
                     "interaction": str(interaction.relative_to(inpath)),
                     "class": "",
                 }
-                for image, label, interaction in zip(images, labels, interactions)
+                for image, label, interaction in zip(images, labels, interactions)     
             ]
 
         all_labels.extend(labels)
@@ -102,8 +134,7 @@ def get_stats(inpath, all_subtypes=None):
         labels.extend(list(np.unique(sitk.GetArrayFromImage(label))))
 
     data["labels"] = sorted([*set(labels)])
-    return data
-
+    return data, mod_number
 
 def main():
     parser = argparse.ArgumentParser(
@@ -160,6 +191,7 @@ def main():
         help="Which licence do you provide with this dataset",
     )
     args = parser.parse_args()
+    n_modalities = len(args.modalities)
 
     inpath = Path(os.environ["interactivenet_raw"], args.task)
 
@@ -174,7 +206,7 @@ def main():
     else:
         subtypes = None
 
-    stats = get_stats(inpath, subtypes)
+    stats, mod_number = get_stats(inpath, n_modalities, subtypes)
 
     if len(args.labels) == len(stats["labels"]):
         labels = {k: v for k, v in zip([*range(len(stats["labels"]))], args.labels)}
@@ -186,10 +218,11 @@ def main():
     else:
         n_labels = stats["labels"]
         raise ValueError(
-            f"Non matching labels, as there are {n_labels} found and {args.labels} providedd"
+            f"Non matching labels, as there are {n_labels} found and {args.labels} provided"
         )
+    
+    modalities = {k: v for k, v in zip(mod_number, args.modalities)}
 
-    modalities = {k: v for k, v in zip([*range(len(args.modalities))], args.modalities)}
 
     with open(str(inpath / "dataset.json"), "w") as f:
         json.dump(
@@ -212,3 +245,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

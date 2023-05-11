@@ -25,7 +25,7 @@ from monai.transforms import (
 from interactivenet.transforms.transforms import (
     Resamplingd,
     EGDMapd,
-    BoudingBoxd,
+    BoundingBoxd,
     Visualized,
     NormalizeValuesd,
     AddDirectoryd,
@@ -73,7 +73,7 @@ def processing_transforms(
             keys=["image", "interaction", "label"],
             pixdim=target_spacing,
         ),
-        BoudingBoxd(
+        BoundingBoxd(
             keys=["image", "interaction", "label"],
             on="label",
             relaxation=relax_bbox,
@@ -126,7 +126,6 @@ def processing_transforms(
         return Compose(transforms)
     else:
         return transforms
-
 
 def training_transforms(seed: Optional[int] = None, validation: bool = False):
     if seed:
@@ -222,7 +221,7 @@ def inference_transforms(
             keys=["image", "interaction"],
             pixdim=metadata["Fingerprint"]["Target spacing"],
         ),
-        BoudingBoxd(
+        BoundingBoxd(
             keys=["image", "interaction"],
             on="interaction",
             relaxation=metadata["Plans"]["padding"],

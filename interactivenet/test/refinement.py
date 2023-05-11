@@ -27,7 +27,7 @@ from monai.data import Dataset, DataLoader, decollate_batch
 
 from interactivenet.transforms.transforms import (
     EGDMapd,
-    BoudingBoxd,
+    BoundingBoxd,
     NormalizeValuesd,
     OriginalSize,
     LoadWeightsd,
@@ -67,7 +67,7 @@ class Refinement(pl.LightningModule):
                 ),
                 Activationsd(keys=["weights"], softmax=True),
                 EnsureChannelFirstd(keys=["image", "annotation"]),
-                BoudingBoxd(
+                BoundingBoxd(
                     keys=["image", "annotation", "weights"],
                     on="annotation",
                     relaxation=0.1,

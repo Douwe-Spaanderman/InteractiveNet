@@ -174,7 +174,6 @@ class LoadWeightsd(MapTransform):
 
             d[key] = weights
             d[f"{key}_meta_dict"] = d[f"{self.ref_image}_meta_dict"]
-
         return d
 
 
@@ -194,25 +193,35 @@ class AddDirectoryd(MapTransform):
         self.directory = directory
         self.convert_to_pathlib = convert_to_pathlib
 
+    def add_directory(self, v):
+        if self.directory:
+            if isinstance(self.directory, os.PathLike):
+                value = self.directory / v
+            elif self.directory.endswith("/"):
+                value = self.directory + "/" + v
+            else:
+                value = self.directory + v
+        else:
+            value = v
+
+        if self.convert_to_pathlib and value != "":
+            value = Path(value)
+
+        return value
+
     def __call__(self, data):
         d = dict(data)
 
         for key in self.keys:
-            if self.directory:
-                if isinstance(self.directory, os.PathLike):
-                    value = self.directory / d[key]
-                elif self.directory.endswith("/"):
-                    value = self.directory + "/" + d[key]
-                else:
-                    value = self.directory + d[key]
+            if isinstance(d[key], list):
+                value = []
+                for v in d[key]:
+                    value.append(self.add_directory(v))
             else:
-                value = d[key]
-
-            if self.convert_to_pathlib and value != "":
-                value = Path(value)
+                value = self.add_directory(d[key])
 
             d[key] = value
-
+        
         return d
 
 
@@ -278,15 +287,16 @@ class Visualized(MapTransform):
         image = d[f"{image}"]
         label = d[f"{label}"]
 
-        ImagePlot(
-            image,
-            label,
-            interaction=interaction,
-            additional_scans=self.additional,
-            CT=self.CT,
-            save=save,
-            show=False,
-        )
+        for i, channel in enumerate(image):
+            ImagePlot(
+                channel[None, ],
+                label,
+                interaction=interaction,
+                additional_scans=self.additional,
+                CT=self.CT,
+                save=Path(str(save) + f"_{i}"),
+                show=True,
+            )
 
         return d
 
@@ -422,7 +432,7 @@ class Resamplingd(MapTransform):
         return d
 
 
-class BoudingBoxd(MapTransform):
+class BoundingBoxd(MapTransform):
     """
     This transform class takes the bounding box of an object based on the mask or annotations.
     """
@@ -590,12 +600,12 @@ class BoudingBoxd(MapTransform):
         )
 
         print(
-            f"Original bouding box at location: {bbox[0]} and {bbox[1]} \t shape of bbox: {bbox_shape}"
+            f"Original bounding box at location: {bbox[0]} and {bbox[1]} \t shape of bbox: {bbox_shape}"
         )
         final_bbox, zeropadding = self.relax_bbox(d[self.on][0], bbox, relaxation)
         final_bbox_shape = np.subtract(final_bbox[1], final_bbox[0])
         print(
-            f"Bouding box at location: {final_bbox[0]} and {final_bbox[1]} \t bbox is relaxt with: {relaxation} \t and zero_padding: {zeropadding} \t and made divisible with: {self.divisiblepadd} \t shape after cropping: {final_bbox_shape}"
+            f"Bounding box at location: {final_bbox[0]} and {final_bbox[1]} \t bbox is relaxt with: {relaxation} \t and zero_padding: {zeropadding} \t and made divisible with: {self.divisiblepadd} \t shape after cropping: {final_bbox_shape}"
         )
         for key in self.keys:
             if len(d[key].shape) == 4:
@@ -663,7 +673,7 @@ class NormalizeValuesd(MapTransform):
 
 class EGDMapd(MapTransform):
     """
-    This transform class creates an exponetialized geodesic distance map, based on an image and annotations.
+    This transform class creates an exponentialized geodesic distance map, based on an image and annotations.
     For more information you can look into:
     https://github.com/taigw/GeodisTK
     """
@@ -709,12 +719,12 @@ class EGDMapd(MapTransform):
                 image = d[self.image]
 
             if len(d[key].shape) == 4:
-                for idx in range(d[key].shape[0]):
-                    img = image[idx]
+                GD_list = []
+                for img in image: #Assuming interaction never has multiple channels before making the EGD
 
                     GD = GeodisTK.geodesic3d_raster_scan(
                         img.astype(np.float32),
-                        d[key][idx].astype(np.uint8),
+                        d[key][0].astype(np.uint8),
                         spacing.astype(np.float32),
                         self.lamb,
                         self.iter,
@@ -725,7 +735,10 @@ class EGDMapd(MapTransform):
                     if self.logscale == True:
                         GD = np.exp(-GD)
 
-                    d[key][idx, :, :, :] = GD
+                    GD_list.append(GD)
+
+                GD = np.stack(GD_list)
+                d[key] = GD
             else:
                 GD = GeodisTK.geodesic3d_raster_scan(
                     image.astype(np.float32),
@@ -746,6 +759,7 @@ class EGDMapd(MapTransform):
             f"Geodesic Distance Map with lamd: {self.lamb}, iter: {self.iter} and logscale: {self.logscale}"
         )
         return d
+        
 
 
 class SavePreprocessed(MapTransform):
@@ -770,14 +784,12 @@ class SavePreprocessed(MapTransform):
             .split("/")[-1]
             .split(".nii.gz")[0]
         )
-
         np.savez(self.save / name, **{key: d[key] for key in self.keys})
 
         pickle_data = {key: d[key] for key in self.meta_keys}
-
+        
         with open(self.save / (name + ".pkl"), "wb") as handle:
             pickle.dump(pickle_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
         return d
 
 
@@ -804,7 +816,6 @@ class LoadPreprocessed(MapTransform):
     def read_pickle(self, filename: Optional[Union[str, os.PathLike]]):
         with open(filename, "rb") as handle:
             b = pickle.load(handle)
-
         return b
 
     def __call__(self, data):
@@ -852,5 +863,4 @@ class LoadPreprocessed(MapTransform):
                         new_d[new_key] = metadata[old_key]
             else:
                 raise ValueError("Neither npz or pkl in preprocessed loader")
-
         return new_d

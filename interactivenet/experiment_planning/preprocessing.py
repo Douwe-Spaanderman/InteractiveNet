@@ -16,7 +16,7 @@ class Preprocessing(MonaiDataset):
     def __init__(
         self,
         task: str,
-        data: List[Dict[str, str]],
+        data: List[Dict[str, Union[List, str]]],
         target_spacing: Tuple[float],
         relax_bbox: Union[float, Tuple[float]] = 0.1,
         divisble_using: Union[int, Tuple[int]] = (16, 16, 8),
@@ -53,7 +53,6 @@ class Preprocessing(MonaiDataset):
             ct=self.ct,
             verbose=self.verbose,
         )
-
         super().__init__(self.data, self.transforms)
 
     def __call__(self) -> None:
@@ -63,7 +62,6 @@ class Preprocessing(MonaiDataset):
             name = Path(item["label"]).with_suffix("").stem
             print(f"File: {name}")
             item = self.__getitem__(i)
-
             metainfo[name] = self.create_metainfo(item)
             print("")
 
@@ -128,7 +126,6 @@ def main():
         verbose=args.verbose,
     )
     preprocess()
-
 
 if __name__ == "__main__":
     main()
