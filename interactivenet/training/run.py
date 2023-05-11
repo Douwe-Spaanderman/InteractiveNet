@@ -6,7 +6,8 @@ import argparse
 
 from monai.utils import set_determinism
 from monai.transforms import AsDiscrete
-from monai.networks.nets import DynUNet
+#from monai.networks.nets import DynUNet
+from interactivenet.networks.fusion import DynUNet
 from monai.metrics import DiceMetric
 from monai.losses import DiceCELoss
 from monai.data import Dataset, DataLoader, decollate_batch
@@ -59,6 +60,7 @@ class Net(pl.LightningModule):
         self.batch_size = 1
         self.seed = self.metadata["Plans"]["seed"]
         self.supervision_weights = metadata["Plans"]["deep supervision weights"]
+        self.supervision_weights = self.supervision_weights[:1] + [weight / 2 for weight in self.supervision_weights[1:]] * 2
 
     def forward(self, x):
         return self._model(x)

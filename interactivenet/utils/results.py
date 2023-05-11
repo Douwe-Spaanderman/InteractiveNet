@@ -66,8 +66,11 @@ def AnalyzeResults(
                 f[idx] = ImagePlot(image, output[0], CT=metadata["Fingerprint"]["CT"])
 
         for idx, _ in enumerate(images):      
-            mlflow.log_figure(f[idx], f"images/{name}_{idx}.png")
-            mlflow.log_figure(f[idx], f"images/{name}_{idx}.png")
+            if len(images) == 1:
+                mlflow.log_figure(f[idx], f"images/{name}.png")
+            else:
+                mlflow.log_figure(f[idx], f"images/{name}_{idx}.png")
+                mlflow.log_figure(f[idx], f"images/{name}_{idx}.png")
 
     if labels:
         mlflow.log_metric("Mean dice", np.mean(list(dices.values())))

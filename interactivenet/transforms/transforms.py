@@ -673,7 +673,7 @@ class NormalizeValuesd(MapTransform):
 
 class EGDMapd(MapTransform):
     """
-    This transform class creates an exponetialized geodesic distance map, based on an image and annotations.
+    This transform class creates an exponentialized geodesic distance map, based on an image and annotations.
     For more information you can look into:
     https://github.com/taigw/GeodisTK
     """

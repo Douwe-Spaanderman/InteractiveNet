@@ -7,6 +7,7 @@ import SimpleITK as sitk
 import numpy as np
 from pathlib import Path
 from scipy import ndimage
+from skimage.measure import label 
 
 from typing import Union, Optional, List
 
@@ -27,11 +28,12 @@ class MaskedItem(object):
         self.Image = self._from_simpleITK(self.Image)
         self.Anisotropic = self._check_Anisotropic()
         self.Dimensions = self.Mask.shape
-        self.inds_z, self.inds_y, self.inds_x = np.where(self.Mask > 0.5)
         self.Cropped = False
         self.RandomPoints = None
         self.ExtremePoints = None
         self.CenterPoints = None
+        self.LargestCC = np.copy(self.Mask)
+        self.inds_z, self.inds_y, self.inds_x = np.where(self.Mask > 0.5)
         self.BoundingBox = None
         self.NewMask = None
         self.ChangedMask = np.copy(self.Mask)
@@ -104,6 +106,13 @@ class MaskedItem(object):
             raise ValueError(
                 "Mask is empty, i.e. no segmentation is provided, therefore cannot derive synthetic interactions"
             )
+        
+    def get_largest_CC(self):
+        labels = label(np.copy(self.LargestCC))
+        largestCC = labels == np.argmax(np.bincount(labels.flat)[1:])+1
+        self.LargestCC = np.where(largestCC, self.LargestCC, 0)
+        self.inds_z, self.inds_y, self.inds_x = np.where(self.LargestCC > 0.5)
+    
 
     def find_border(self, iterations=1) -> None:
         matrix = np.copy(self.ChangedMask)
@@ -111,6 +120,7 @@ class MaskedItem(object):
             matrix.dtype
         )
         self.ChangedMask = self.ChangedMask - matrix
+
 
     def add_border(self, iterations=1) -> None:
         matrix = np.copy(self.ChangedMask)
@@ -122,7 +132,6 @@ class MaskedItem(object):
 
     def get_bbox(self, pad=0) -> None:
         pad_z, pad_y, pad_x = self._assert_pad("bbox", pad)
-
         self.BoundingBox = np.array(
             [
                 [
@@ -339,6 +348,7 @@ def create_sample(
     extreme_points: Optional[Union[str, List[str]]] = None,
     random_points: Optional[int] = None,
     center_point: bool = False,
+    largest_CC: bool = False,
     scribble: bool = False,
     mode: str = "Tr",
     save: bool = False,
@@ -348,6 +358,10 @@ def create_sample(
     data = MaskedItem(input_mask, input_image)
 
     data.check_mask_not_empty()
+
+    if largest_CC:
+        data.get_largest_CC()
+
     data.get_bbox(pad=[1, 3, 3])
 
     if border:
@@ -418,6 +432,7 @@ def create_experiment(
     extreme_points: Optional[Union[str, List[str]]] = None,
     random_points: Optional[int] = None,
     center_point: bool = False,
+    largest_CC: bool = False,
     scribble: bool = False,
     plot: bool = False,
     gif: bool = False,
@@ -440,6 +455,7 @@ def create_experiment(
                 extreme_points=extreme_points,
                 random_points=random_points,
                 center_point=center_point,
+                largest_CC=largest_CC,
                 scribble=False,
                 mode=mode,
                 save=inpath,
@@ -519,6 +535,13 @@ def main():
         help="Do you want to get the center point",
     )
     parser.add_argument(
+        "-l",
+        "--largest_CC",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="Do you want to use the largest volume",
+    )
+    parser.add_argument(
         "-s",
         "--plot",
         default=False,
@@ -547,6 +570,7 @@ def main():
         extreme_points=args.extreme_points,
         random_points=args.random_points,
         center_point=args.center_point,
+        largest_CC=args.largest_CC,
         scribble=False,  # Not implemented at this time
         plot=args.plot,
         gif=args.gif,
