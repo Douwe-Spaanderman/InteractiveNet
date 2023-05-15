@@ -517,6 +517,21 @@ class BoudingBoxd(MapTransform):
             ]
         ])
 
+	# Done for plotting
+        print(bbox)
+        x = bbox[1][0] - bbox[0][0]
+        y = bbox[1][1] - bbox[0][1]
+
+        diff = x - y
+        if diff > 0:
+            added = int(diff / 2)
+            bbox[0][1] = bbox[0][1] - added
+            bbox[1][1] = bbox[1][1] + added
+        elif diff < 0:
+            added = int(abs(diff / 2))
+            bbox[0][0] = bbox[0][0] - added
+            bbox[1][0] = bbox[1][0] + added
+        
         return bbox
 
     def calculate_relaxtion(self, bbox_shape, anisotropic=False):
@@ -636,7 +651,7 @@ class BoudingBoxd(MapTransform):
 
         bbox = self.calculate_bbox(d[self.on][0])
         bbox_shape = np.subtract(bbox[1],bbox[0])
-        relaxation = self.calculate_relaxtion(bbox_shape, d[f"{key}_meta_dict"]["anisotrophy_flag"])
+        relaxation = self.calculate_relaxtion(bbox_shape, True)
 
         print(f"Original bouding box at location: {bbox[0]} and {bbox[1]} \t shape of bbox: {bbox_shape}")
         final_bbox, zeropadding = self.relax_bbox(d[self.on][0], bbox, relaxation)

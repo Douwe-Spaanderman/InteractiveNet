@@ -19,7 +19,7 @@ def pol2cart(rho, phi):
     return(x, y)
 
 
-def ImagePlot(img, GT, annotation=None, additional_scans=None, CT=False, radius=1, zoom=False, show=None, save=None, save_type='png', colors=['dodgerblue', 'magenta', 'cyan', 'navy', 'purple'], cmap=plt.cm.gray, ax=None):
+def ImagePlot(img, GT, annotation=None, additional_scans=None, CT=False, slice=None, radius=1, show=None, save=None, save_type='png', colors=['dodgerblue', 'magenta', 'cyan', 'navy', 'purple'], cmap=plt.cm.gray, ax=None, no_overlay=False, specific_z_slice=False, interactions=False):
     if not isinstance(GT, list):
         segs = [GT]
     else:
@@ -38,14 +38,15 @@ def ImagePlot(img, GT, annotation=None, additional_scans=None, CT=False, radius=
         img = img[0]
         segs = [seg[0] for seg in segs]
 
-    if annotation:
-        _, _, inds_z = np.where(segs[-1] > 0.5)
-        inds_z = sorted(inds_z)
-        slice = inds_z[int((len(inds_z) - 1)/2)]
-    else:
-        AreaCentre = ndimage.measurements.center_of_mass(segs[0])
-        AreaCentre = [int(x) for x in AreaCentre]
+    AreaCentre = ndimage.measurements.center_of_mass(segs[0])
+    AreaCentre = [int(x) for x in AreaCentre]
+    if not slice:
         slice = AreaCentre[2]
+
+    print(slice)
+    if specific_z_slice:
+        slice = specific_z_slice
+        print(f"overwriting slice with: {slice}")
 
     x, y = np.nonzero(segs[0][:, :, slice])
 
@@ -73,13 +74,18 @@ def ImagePlot(img, GT, annotation=None, additional_scans=None, CT=False, radius=
     ax.imshow(img_threshold[:, :, slice], cmap=cmap, aspect='auto')
 
     # Plot overlays for each contour
-    disk = morphology.disk(radius)
-    for seg, color in zip(segs, colors):
-        contour_or = np.squeeze(seg[:, :, slice])
-        contour_e = morphology.binary_dilation(contour_or, disk)
-        contour = np.subtract(contour_e, contour_or)
-        y, x = np.nonzero(contour)
-        ax.scatter(x, y, color=color, marker='s')
+    if not no_overlay:
+        disk = morphology.disk(radius)
+        for seg, color in zip(segs, colors):
+            if interactions:
+                contour = np.squeeze(seg[:, :, slice])
+            else:
+                contour_or = np.squeeze(seg[:, :, slice])
+                contour_e = morphology.binary_dilation(contour_or, disk)
+                contour = np.subtract(contour_e, contour_or)
+
+            y, x = np.nonzero(contour)
+            ax.scatter(x, y, color=color, marker='s')
 
     plt.axis('off')
 
