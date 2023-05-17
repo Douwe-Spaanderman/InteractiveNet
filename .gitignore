@@ -133,3 +133,7 @@ mlruns/*
 slurm/*
 exp/*
 lightning_logs/*
+
+# GUI
+GUI/apps/interactivenet/bin
+GUI/apps/interactivenet/logs

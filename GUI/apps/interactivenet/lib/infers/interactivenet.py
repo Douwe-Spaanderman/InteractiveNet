@@ -36,7 +36,8 @@ from interactivenet.transforms.transforms import (
     EGDMapd,
 )
 
-from monailabel.interfaces.tasks.infer import InferTask, InferType
+from monailabel.interfaces.tasks.infer_v2 import InferType
+from monailabel.interfaces.tasks.infer import BasicInferTask
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ from typing import Sequence, Tuple
 
 
 
-class InteractiveNet(InferTask):
+class InteractiveNet(BasicInferTask):
     """ """
 
     def __init__(
@@ -243,7 +244,6 @@ class InteractiveNet(InferTask):
 
         if network is None:
             network = torch.load(path, map_location=torch.device(device))
-            print(network)
             network.eval()
 
         return network

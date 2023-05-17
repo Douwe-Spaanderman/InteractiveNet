@@ -24,7 +24,7 @@
     "task_handler": {
       "class": "logging.handlers.RotatingFileHandler",
       "formatter": "single",
-      "filename": "/trinity/home/dspaanderman/InteractiveNet/GUI/apps/interactivenet/logs/app.log",
+      "filename": "/home/dspaanderman/Documents/GitProjects/InteractiveNet/GUI/apps/interactivenet/logs/app.log",
       "backupCount": 10,
       "maxBytes": 10485760,
       "encoding": "utf-8"
@@ -32,7 +32,7 @@
     "file_handler": {
       "class": "logging.handlers.RotatingFileHandler",
       "formatter": "simple",
-      "filename": "/trinity/home/dspaanderman/InteractiveNet/GUI/apps/interactivenet/logs/app.log",
+      "filename": "/home/dspaanderman/Documents/GitProjects/InteractiveNet/GUI/apps/interactivenet/logs/app.log",
       "backupCount": 10,
       "maxBytes": 10485760,
       "encoding": "utf-8"

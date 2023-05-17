@@ -4,7 +4,7 @@ Here we provide the [monailabel](https://github.com/Project-MONAI/MONAILabel) ap
 
 # Installation
 
-In order to setup the monailabel server you need to follow the installation guides [here](../README.md#installation). Next you will need to install the extra requirements, found in the requirements.txt. This can be easily done using pip:
+In order to setup the monailabel server you need to follow the installation guides [here](../README.md#installation). **Do not forget to also set the environment PATHs as these are required to find the trained models**. Next you will need to install the extra requirements, found in the requirements.txt. This can be easily done using pip:
 ```
 pip install -r requirements.txt
 ```
