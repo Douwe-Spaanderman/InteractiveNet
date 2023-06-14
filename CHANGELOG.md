@@ -1,5 +1,13 @@
 # Change Log
 
+## Unreleased
+
+### Added
+
+* Zenodo release
+* Release on Pypi
+* Documentation for releases
+
 ## 0.1.0
 
 Released on June 14, 2023.

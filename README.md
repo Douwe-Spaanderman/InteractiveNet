@@ -1,5 +1,15 @@
 # InteractiveNet
 
+ PyPi                          |Citing InteractiveNet          |
+-------------------------------|---------------------|
+[![][pypi]][pypi-lnk]         | [![][DOI]][DOI-lnk] |
+
+[pypi]: https://badge.fury.io/py/interactivenet.svg
+[pypi-lnk]: https://badge.fury.io/py/interactivenet
+
+[DOI]: https://zenodo.org/badge/469761094.svg
+[DOI-lnk]: https://zenodo.org/badge/latestdoi/469761094
+
 Automatic segmentation has success in a variety of application throughout medical imaging. However, there could be a couple of reasons for automatic segmentation to fall short of providing accurate segmentations:
 - Object are irregular and/or lobulated, which creates difficult segmentation task.
 - It is impossible to encompass all heterogeneity from the patient population in a training dataset.
@@ -36,7 +46,18 @@ When using InteractiveNet, please cite the paper describing InteractiveNet as as
    year={2023},
    note={Submitted},
 }
+
+@software{starmans2018worc,
+  author       = {Douwe J. Spaanderman, Martijn P. A. Starmans and Stefan Klein},
+  title        = {Interactivenet, an automatic configuring minimally interactive segmentation workflow},
+  year         = {2023},
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.8038683},
+  url          = {https://github.com/Douwe-Spaanderman/InteractiveNet}
+}
 ```
+
+For the DOI, visit [![][DOI]][DOI-lnk].
 
 # Installation
 InteractiveNet has been tested on Linux (Ubuntu 20.04, and centOS), and MacOS (Big Sur). We do not provide support for other operating systems.
