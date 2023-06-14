@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='interactivenet',
-    version='1.0.0',
+    version='0.1.0',
     description='InteractiveNet, a framework for minimally interactive medical image segmentation.',
     url='https://github.com/Douwe-Spaanderman/InteractiveNet',
     packages=find_packages(include=['interactivenet', 'interactivenet.*']),

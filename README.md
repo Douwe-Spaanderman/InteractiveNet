@@ -24,6 +24,20 @@ Inspired by [nnU-Net](https://github.com/MIC-DKFZ/nnUNet), InteractiveNet uses d
 - [Pretrained model](#Pretrained-model)
 - [Graphical User Interface](#Graphical-User-Interface)
 
+## License
+This package is covered by the open source [APACHE 2.0 License](LICENSE.md).
+
+When using InteractiveNet, please cite the paper describing InteractiveNet as as follows:
+
+```bibtex
+@article{spaanderman2023softtissuesegmentation,
+   title={Minimally Interactive Segmentation of Soft-Tissue Tumors on CT and MRI using Deep Learning}, 
+   author={Douwe J. Spaanderman, Martijn P. A. Starmans, Gonnie C. M. van Erp, David F. Hanff, Judith Sluijter, Anne-Rose W. Schut, Geert J. L. H. van Leenders, Cornelis Verhoef, Dirk J. Grünhagen, Wiro J. Niessen, Jacob J. Visser, and Stefan Klein},
+   year={2023},
+   note={Submitted},
+}
+```
+
 # Installation
 InteractiveNet has been tested on Linux (Ubuntu 20.04, and centOS), and MacOS (Big Sur). We do not provide support for other operating systems.
 
