@@ -6,7 +6,12 @@
 
 * Zenodo release
 * Release on Pypi
+* LICENSE added to all files
 * Documentation for releases
+
+### Changed
+
+* Personal author to group (BIGR)
 
 ## 0.1.0
 

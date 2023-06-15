@@ -35,7 +35,7 @@ Inspired by [nnU-Net](https://github.com/MIC-DKFZ/nnUNet), InteractiveNet uses d
 - [Graphical User Interface](#Graphical-User-Interface)
 
 ## License
-This package is covered by the open source [APACHE 2.0 License](LICENSE.md).
+This package is covered by the open source [APACHE 2.0 License](LICENSE).
 
 When using InteractiveNet, please cite the paper describing InteractiveNet as as follows:
 

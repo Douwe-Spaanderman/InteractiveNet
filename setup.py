@@ -6,7 +6,7 @@ with open('README.rst', 'r') as fh:
 setup(
     name='interactivenet',
     version='0.1.0',
-    author = 'Douwe J. Spaanderman',
+    author = 'Biomedical Imaging Group Rotterdam (BIGR)',
     license='Apache License, Version 2.0',
     author_email='d.spaanderman@erasmusmc.nl',
     description='InteractiveNet, a framework for minimally interactive medical image segmentation.',
