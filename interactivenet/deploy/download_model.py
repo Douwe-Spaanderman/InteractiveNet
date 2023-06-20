@@ -48,7 +48,7 @@ def print_available_pretrained_models():
 
 def download_and_install_model():
     models = get_available_models()
-    available_models = list(models.keys())
+    available_models = ["all"] + list(models.keys())
 
     parser = argparse.ArgumentParser(
         description="Download and install pretrained networks"
@@ -65,13 +65,21 @@ def download_and_install_model():
     if "interactivenet_results" not in os.environ:
         raise RuntimeError(f"Environment paths have not been set, this means InteractiveNet has not been correctly installed.")
 
-    if args.task not in models.keys():
-        raise RuntimeError(f"The requested pretrained model ({args.task}) is not available.")
-
+    if args.task == "all":
+        for model in models.keys():
+            download_install(task=model, models=models)
+    else:
+        download_install(task=args.task, models=models)
+    
+def download_install(task:str, models:dict):
+    print(f"\nDownloading and Installing {task}")
     results = Path(os.environ["interactivenet_results"], "models")
     results.mkdir(parents=True, exist_ok=True)
 
-    url = models[args.task]['url']
+    if task not in models.keys():
+        raise RuntimeError(f"The requested pretrained model ({task}) is not available.")
+
+    url = models[task]['url']
 
     print("Downloading files")
     local = results / url.split('/')[-1]
@@ -83,7 +91,7 @@ def download_and_install_model():
 
     print("Extracting files")
     with zipfile.ZipFile(str(local), 'r') as zip_ref:
-        zip_ref.extractall(str(results / args.task))
+        zip_ref.extractall(str(results / task))
 
     local.unlink(missing_ok=False)
     print('Done')
