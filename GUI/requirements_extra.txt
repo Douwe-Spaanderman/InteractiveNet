@@ -1,1 +1,1 @@
-monailabel>=0.6.0
+monailabel>=0.7.0

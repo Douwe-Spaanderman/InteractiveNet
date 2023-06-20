@@ -120,7 +120,7 @@ class InteractiveNet(InferTask):
                     ref_image="image",
                     guidance="interaction",
                     depth_first=False,
-                    dimensions=3,
+                    spatial_dims=3,
                 ),
                 AnnotationToChanneld(
                     ref_image="image", guidance="interaction", method="interactivenet"
@@ -236,7 +236,7 @@ class InteractiveNet(InferTask):
 
         return data
 
-    def _get_network(self, device):
+    def _get_network(self, device, data):
         path = self.get_path()
         logger.info(f"Infer model path: {path}")
         if not path and not self.network:
