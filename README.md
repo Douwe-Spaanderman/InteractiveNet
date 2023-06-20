@@ -1,5 +1,15 @@
 # InteractiveNet
 
+ PyPi                          |Citing InteractiveNet          |
+-------------------------------|---------------------|
+[![][pypi]][pypi-lnk]         | [![][DOI]][DOI-lnk] |
+
+[pypi]: https://badge.fury.io/py/interactivenet.svg
+[pypi-lnk]: https://badge.fury.io/py/interactivenet
+
+[DOI]: https://zenodo.org/badge/469761094.svg
+[DOI-lnk]: https://zenodo.org/badge/latestdoi/469761094
+
 Automatic segmentation has success in a variety of application throughout medical imaging. However, there could be a couple of reasons for automatic segmentation to fall short of providing accurate segmentations:
 - Object are irregular and/or lobulated, which creates difficult segmentation task.
 - It is impossible to encompass all heterogeneity from the patient population in a training dataset.
@@ -25,7 +35,7 @@ Inspired by [nnU-Net](https://github.com/MIC-DKFZ/nnUNet), InteractiveNet uses d
 - [Graphical User Interface](#Graphical-User-Interface)
 
 ## License
-This package is covered by the open source [APACHE 2.0 License](LICENSE.md).
+This package is covered by the open source [APACHE 2.0 License](LICENSE).
 
 When using InteractiveNet, please cite the paper describing InteractiveNet as as follows:
 
@@ -36,7 +46,18 @@ When using InteractiveNet, please cite the paper describing InteractiveNet as as
    year={2023},
    note={Submitted},
 }
+
+@software{starmans2018worc,
+  author       = {Douwe J. Spaanderman, Martijn P. A. Starmans and Stefan Klein},
+  title        = {Interactivenet, an automatic configuring minimally interactive segmentation workflow},
+  year         = {2023},
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.8038683},
+  url          = {https://github.com/Douwe-Spaanderman/InteractiveNet}
+}
 ```
+
+For the DOI, visit [![][DOI]][DOI-lnk].
 
 # Installation
 InteractiveNet has been tested on Linux (Ubuntu 20.04, and centOS), and MacOS (Big Sur). We do not provide support for other operating systems.
@@ -154,7 +175,14 @@ In order to run your deployed models, simply use ```interactive_inference``` as 
 
 # Pretrained model
 
-Due to the blinded nature of journal reviewing process, we cannot currently share the pretrained models, as they are on our institute gdrive, however we will do so when the paper is accepted. 
+Pretrained models can be found [here](https://zenodo.org/record/8054038). All available can also be printed using ```interactivenet_available_models```. 
+
+In order to download and install pretrained models you can use the following provided command:
+```
+interactivenet_download_model -t TaskXXX_YOURTASK
+```
+
+```-t``` or ```--task``` defines the model which will be download. All available models can be found as described above or by checking the options under ```-h``` or ```--help```. In order to run pretrained models, simply use ```interactive_inference``` as described above. 
 
 # Graphical User Interface
 

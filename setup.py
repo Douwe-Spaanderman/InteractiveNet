@@ -1,10 +1,18 @@
 from setuptools import setup, find_packages
 
+#with open('README.rst', 'r') as fh:
+#    _description = fh.read()
+
 setup(
     name='interactivenet',
     version='0.1.0',
+    author = 'Biomedical Imaging Group Rotterdam (BIGR)',
+    license='Apache License, Version 2.0',
+    author_email='d.spaanderman@erasmusmc.nl',
     description='InteractiveNet, a framework for minimally interactive medical image segmentation.',
+    #long_description=_description,
     url='https://github.com/Douwe-Spaanderman/InteractiveNet',
+    download_url = 'https://github.com/Douwe-Spaanderman/InteractiveNet/archive/refs/tags/v0.1.0.tar.gz',
     packages=find_packages(include=['interactivenet', 'interactivenet.*']),
     python_requires='>3.9.0',
     install_requires=[
@@ -39,8 +47,8 @@ setup(
             'interactivenet_predict=interactivenet.test.predict:main',
             'interactivenet_test=interactivenet.test.run:main',
             'interactivenet_deploy=interactivenet.deploy.save_model:main',
-            'interactivenet_available_models=interactivenet.deploy.print_models:main',
-            'interactivenet_download_model=interactivenet.deploy.download_model:main',
+            'interactivenet_available_models=interactivenet.deploy.download_model:print_available_pretrained_models',
+            'interactivenet_download_model=interactivenet.deploy.download_model:download_and_install_model',
             ]
     },
     keywords=[
