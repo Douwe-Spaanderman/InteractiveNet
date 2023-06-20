@@ -258,7 +258,6 @@ class InteractiveNet(InferTask):
 
         if network is None:
             network = torch.load(path, map_location=torch.device(device))
-            print(network)
             network.eval()
 
         return network
