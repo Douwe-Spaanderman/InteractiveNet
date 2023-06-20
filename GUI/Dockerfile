@@ -41,5 +41,6 @@ RUN pip install --no-cache-dir -r requirements.txt \
     export interactivenet_results="/app/apps/interactivenet/model"
 
 RUN if [ $MODELS != "all" ]; then \
-    download_and_install_model -t $MODELS \
-    monailabel start_server --app apps/interactivenet --studies $DATA --conf models $MODELS
+    download_and_install_model -t $MODELS
+    
+CMD ["monailabel", "start_server", "--app", "apps/interactivenet", "--studies", "$DATA", "--conf", "models", "$MODELS"]
