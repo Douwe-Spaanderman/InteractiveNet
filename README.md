@@ -175,7 +175,14 @@ In order to run your deployed models, simply use ```interactive_inference``` as 
 
 # Pretrained model
 
-Due to the blinded nature of journal reviewing process, we cannot currently share the pretrained models, as they are on our institute gdrive, however we will do so when the paper is accepted. 
+Pretrained models can be found [here](https://zenodo.org/record/8054038). All available can also be printed using ```interactivenet_available_models```. 
+
+In order to download and install pretrained models you can use the following provided command:
+```
+interactivenet_download_model -t TaskXXX_YOURTASK
+```
+
+```-t``` or ```--task``` defines the model which will be download. All available models can be found as described above or by checking the options under ```-h``` or ```--help```. In order to run pretrained models, simply use ```interactive_inference``` as described above. 
 
 # Graphical User Interface
 
