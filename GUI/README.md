@@ -4,12 +4,14 @@ Here we provide the [monailabel](https://github.com/Project-MONAI/MONAILabel) ap
 
 # Installation
 
-In order to setup the monailabel server you need to follow the installation guides [here](../README.md#installation). Next you will need to install the extra requirements, found in the requirements.txt. This can be easily done using pip:
+In order to setup the monailabel server you need to follow the installation guides [here](../README.md#installation). Next you will need to install the extra requirements, found in the requirements_extra.txt (or in requirements.txt). This can be easily done using pip:
 ```
-pip install -r requirements.txt
+pip install -r requirements_extra.txt
 ```
 
-Next you will need to either install [3D slicer](https://www.slicer.org/) or the [OHIF](https://ohif.org/) viewer. Finally, in both viewers you have to install the monailabel plugin as described [here](https://github.com/Project-MONAI/MONAILabel/README#Plugins).
+Next, you will need to either install [3D slicer](https://www.slicer.org/) or the [OHIF](https://ohif.org/) viewer. Finally, in both viewers you have to install the monailabel plugin as described [here](https://github.com/Project-MONAI/MONAILabel/README#Plugins).
+
+Alternatively, we provided a [docker](https://www.docker.com/) image in order to setup the monailabel application, and everything required. Note that this doesn't include the viewer.
 
 # Usage
 
