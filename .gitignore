@@ -133,7 +133,3 @@ mlruns/*
 slurm/*
 exp/*
 lightning_logs/*
-
-# Remove created files
-/GUI/examples/*
-!/GUI/examples/*.nii.gz

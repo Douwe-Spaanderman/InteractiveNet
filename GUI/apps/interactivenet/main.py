@@ -107,9 +107,6 @@ class MyApp(MONAILabelApp):
                 if self.models.get(k):
                     continue
                 if n == k or n == "all":
-                    if n == "all":
-                        conf["models"] = k
-                        
                     logger.info(f"+++ Adding Model: {k} => {v}")
                     self.models[k] = eval(f"{v}()")
                     self.models[k].init(k, self.model_dir, conf, self.planner, studies)
