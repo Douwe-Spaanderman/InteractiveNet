@@ -317,8 +317,7 @@ def main():
     )
 
     args = parser.parse_args()
-    Path(os.environ["interactiveseg_raw"], args.task)
-    results = Path(os.environ["interactiveseg_results"])
+    results = Path(os.environ["interactivenet_results"])
 
     accelerator, devices, _ = check_gpu()
 
