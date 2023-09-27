@@ -22,16 +22,15 @@ from pathlib import Path
 import SimpleITK as sitk
 
 
-def sanity_check(images, labels, interactions, mode="Tr"):
+def sanity_check(images, labels, interactions, mode="Ts"):
     def check(a, b, c=None):
         if c:
             return a == b == c
         else:
             return a == b
 
-    len_images = len(images)
     if mode == "Tr":
-        if not len(labels) % len_images == len(interactions) % len_images == 0:
+        if not check(len(labels), len(images), len(interactions)):
             raise AssertionError(
                 "Length of database is not correct, e.g. more labels or interactions than images"
             )
@@ -77,7 +76,6 @@ def get_stats(inpath, all_subtypes=None):
         if mode == "Ts":
             if not labels:
                 warnings.warn("No labels present for test set")
-                labels = len(images) * [""]
                 sanity_check(images, labels, interactions)
             else:
                 sanity_check(images, labels, interactions, mode="Tr")
@@ -85,7 +83,23 @@ def get_stats(inpath, all_subtypes=None):
             sanity_check(images, labels, interactions, mode)
 
         if all_subtypes:
-            subtypes = [all_subtypes[x.stem.split(".nii")[0]] for x in labels]
+            subtypes = [all_subtypes[x.stem.split(".nii")[0]] for x in interactions]
+        else:
+            subtypes = len(images) * [""]
+
+        if not labels:
+            data[mode] = [
+                {
+                    "image": str(image.relative_to(inpath)),
+                    "label": "",
+                    "interaction": str(interaction.relative_to(inpath)),
+                    "class": subtype,
+                }
+                for image, interaction, subtype in zip(
+                    images, interactions, subtypes
+                )
+            ]
+        else:
             data[mode] = [
                 {
                     "image": str(image.relative_to(inpath)),
@@ -96,16 +110,6 @@ def get_stats(inpath, all_subtypes=None):
                 for image, label, interaction, subtype in zip(
                     images, labels, interactions, subtypes
                 )
-            ]
-        else:
-            data[mode] = [
-                {
-                    "image": str(image.relative_to(inpath)),
-                    "label": str(label.relative_to(inpath)),
-                    "interaction": str(interaction.relative_to(inpath)),
-                    "class": "",
-                }
-                for image, label, interaction in zip(images, labels, interactions)
             ]
 
         all_labels.extend(labels)
