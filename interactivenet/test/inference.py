@@ -152,7 +152,6 @@ def infer(
         accelerator = "cuda"
 
     mlflow.set_tracking_uri(results / "mlruns")
-    runs, experiment_id = mlflow_get_runs(task)
 
     # Check if models in results / models
     deployed_model = results / "models" / task
@@ -169,7 +168,8 @@ def infer(
 
         models = [x for x in deployed_model.glob("model/*") if x.is_dir()]
     else:
-        print("Using self-trained model")
+        print("No deployed model found, using self-trained model")
+        runs, experiment_id = mlflow_get_runs(task)
         exp = Path(os.environ["interactivenet_processed"], task)
         metadata = read_metadata(exp / "plans.json")
 
