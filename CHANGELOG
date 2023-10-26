@@ -2,9 +2,17 @@
 
 ## Unreleased 
 
+## 0.2.1
+
 ### Fixed
 
 * Improve Docker image
+* Fixed bug when no test segmentations were present in generating dataset json
+* Fixed bug where self-trained model was loaded while using deployed model
+
+### Added
+
+* Support for MONAI 1.2
 
 ## 0.2.0
 
