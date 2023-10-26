@@ -31,6 +31,7 @@ def resample_label(
     reshaped = np.zeros(shape, dtype=np.uint8)
     n_class = np.max(label)
     if anisotrophy_flag:
+        print("USING THE NEW PIL RESAMPLING -- THIS IS JUST FOR DEBUGGING")
         shape_2d = shape[:-1]
         depth = label.shape[-1]
         reshaped_2d = np.zeros((*shape_2d, depth), dtype=np.uint8)
@@ -39,10 +40,9 @@ def resample_label(
             for depth_ in range(depth):
                 mask = label[0, :, :, depth_] == class_
                 # Using PIL where possible for speedup
-                mask = Image.fromarray(mask)
+                mask = Image.fromarray(mask.get_array())
                 resized_2d = mask.resize(shape_2d, resample=Image.BILINEAR)
                 resized_2d = np.asarray(resized_2d)
-                print("USING THE NEW PIL RESAMPLING -- THIS IS JUST FOR DEBUGGING")
                 # Copying is required for protected flag...
                 resized_2d = resized_2d.copy() 
                 reshaped_2d[:, :, depth_][resized_2d >= 0.5] = class_
@@ -81,15 +81,15 @@ def resample_image(
 ):
     resized_channels = []
     if anisotrophy_flag:
+        print("USING THE NEW PIL RESAMPLING -- THIS IS JUST FOR DEBUGGING")
         for image_c in image:
             resized_slices = []
             for i in range(image_c.shape[-1]):
                 image_c_2d_slice = image_c[:, :, i]
-                print("USING THE NEW PIL RESAMPLING -- THIS IS JUST FOR DEBUGGING")
                 vmin, vmax = image_c_2d_slice.min(), image_c_2d_slice.max()
                 # Using PIL where possible for speedup
                 image_c_2d_slice = Image.fromarray(
-                    image_c_2d_slice
+                    image_c_2d_slice.get_array()
                     ).resize(shape[:-1], resample=Image.BICUBIC)
                 # Using numpy clip as this was originally in resize
                 image_c_2d_slice = np.clip(image_c_2d_slice, vmin, vmax)
