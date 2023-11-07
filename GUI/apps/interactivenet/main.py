@@ -51,6 +51,7 @@ class MyApp(MONAILabelApp):
         configs = {}
         for name in [x.name for x in self.model_dir.glob("*") if x.is_dir()]:
             configs[name] = c
+            configs[f"{name}+fastR"] = c
             # configs[f"{name}+ensemble"] = c
             # configs[f"{name}+tta"] = c
             # configs[f"{name}+ensemble+tta"] = c

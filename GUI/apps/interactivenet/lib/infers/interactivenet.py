@@ -23,6 +23,7 @@ from lib.transforms.transforms import (
     AnnotationToChanneld,
     TestTimeFlippingd,
     OriginalSized,
+    EarlyCroppingd,
 )
 from monai.inferers import Inferer, SimpleInferer
 from monai.data import MetaTensor
@@ -69,6 +70,7 @@ class InteractiveNet(InferTask):
         type=InferType.DEEPGROW,
         labels=None,
         dimension=3,
+        fast: bool = False,
         ensemble: bool = False,
         tta: bool = False,
         median_shape: Tuple[float] = (128, 128, 64),
@@ -96,6 +98,7 @@ class InteractiveNet(InferTask):
             **kwargs,
         )
 
+        self.fast = fast
         self.ensemble = ensemble
         self.tta = tta
         self.median_shape = median_shape
@@ -125,7 +128,22 @@ class InteractiveNet(InferTask):
                 AnnotationToChanneld(
                     ref_image="image", guidance="interaction", method="interactivenet"
                 ),
-                AddChanneld(keys=["image"]),
+                AddChanneld(keys=["image"])
+            ]
+        )
+
+        if self.fast:
+            t.extend(
+                [
+                    EarlyCroppingd(
+                        keys=["image", "interaction"],
+                        on="interaction"
+                    ),
+                ]
+            )
+
+        t.extend(
+            [
                 Resamplingd(
                     keys=["image", "interaction"],
                     pixdim=self.target_spacing,
@@ -203,6 +221,7 @@ class InteractiveNet(InferTask):
                     img_key="label",
                     ref_meta="image",
                     discreet=True,
+                    fast=self.fast,
                     device=data.get("device") if data else None,
                 ),
                 KeepLargestConnectedComponentd(keys="label"),

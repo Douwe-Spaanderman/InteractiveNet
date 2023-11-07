@@ -40,7 +40,10 @@ class InteractiveNet(TaskConfig):
     ):
         super().init(name, model_dir, conf, planner, **kwargs)
 
-        task_dir = model_dir / conf["models"]
+        if "+" in conf["models"]:
+            task_dir = model_dir / conf["models"].split("+")[0]
+        else:
+            task_dir = model_dir / conf["models"]
         metadata = read_metadata(task_dir / "plans.json")
 
         # This should be somewhere in the plans.json file!
@@ -84,6 +87,14 @@ class InteractiveNet(TaskConfig):
 
         # All the above commented out code can be used to have a model without tta and ensembling
         # Now we just use both
+
+        # Newly introduced to provide faster pipeline
+        # Note, impact on performance has been limited evaluated.
+        if "fastR" in name:
+            self.fast = True
+        else:
+            self.fast = False
+
         self.ensemble = True
         self.tta = True
         self.path = [
@@ -97,6 +108,7 @@ class InteractiveNet(TaskConfig):
     def infer(self) -> Union[InferTask, Dict[str, InferTask]]:
         task: InferTask = lib.infers.InteractiveNet(
             path=self.path,
+            fast=self.fast,
             ensemble=self.ensemble,
             tta=self.tta,
             median_shape=self.median_shape,

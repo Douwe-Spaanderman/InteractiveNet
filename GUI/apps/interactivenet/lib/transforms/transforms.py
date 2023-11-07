@@ -14,6 +14,7 @@
 #   limitations under the License.
 
 import logging
+from typing import Union, List
 from itertools import combinations
 
 from monai.transforms.transform import MapTransform, Transform
@@ -34,6 +35,132 @@ from interactivenet.utils.resample import (
 logger = logging.getLogger(__name__)
 
 
+class EarlyCroppingd(MapTransform):
+    """
+    This transform class takes the bounding box of an object based on the mask or annotations. This is different than the BoundingBox transform
+    as now the cropping is done with a larger margin and before resampling. So now instead of doing resampling on the whole image and than 
+    extracting the bounding box, we now first extract a large bounding box in order to speed up resampling:
+    non-fast (original)   : resampling -> bounding box
+    fastR (this transform): large bounding box -> resampling -> bounding box 
+
+    Same applies for the weight to orginal size at the end!
+    """
+
+    def __init__(
+        self,
+        keys: Union[str, List[str]],
+        on: str,
+    ) -> None:
+        super().__init__(keys)
+        self.keys = keys
+        self.on = on
+
+    def check_anisotrophy(self, spacing: List[float]):
+        def check(spacing):
+            return np.max(spacing) / np.min(spacing) >= 3
+
+        return check(spacing) or check(self.target_spacing)
+
+
+    def calculate_bbox(self, data: np.ndarray):
+        inds_x, inds_y, inds_z = np.where(data > 0.5)
+
+        bbox = np.array(
+            [
+                [np.min(inds_x), np.min(inds_y), np.min(inds_z)],
+                [np.max(inds_x), np.max(inds_y), np.max(inds_z)],
+            ]
+        )
+
+        return bbox
+
+    def calculate_relaxtion(self, bbox_shape: np.ndarray, anisotropic: bool = False):
+        relaxation = []
+        for i, axis in enumerate(range(len(bbox_shape))):
+
+            if anisotropic and i == 2:  # This is only possible with Z on final axis
+                relaxation.append(5)
+            else:
+                relaxation.append(15)
+
+        return relaxation
+
+    def relax_bbox(self, data: np.ndarray, bbox: np.ndarray, relaxation: List[int]):
+        bbox = np.array(
+            [
+                [
+                    bbox[0][0] - relaxation[0],
+                    bbox[0][1] - relaxation[1],
+                    bbox[0][2] - relaxation[2],
+                ],
+                [
+                    bbox[1][0] + relaxation[0],
+                    bbox[1][1] + relaxation[1],
+                    bbox[1][2] + relaxation[2],
+                ],
+            ]
+        )
+        for axis in range(len(bbox[0])):
+            if bbox[0, axis] == bbox[1, axis]:
+                bbox[0, axis] = bbox[0, axis] - 2
+                bbox[1, axis] = bbox[1, axis] + 2
+                warnings.warn(
+                    f"EarlyCroppingd box has the same size in {axis} axis so extending axis by 1 both direction"
+                )
+
+        # Remove below zero and higher than shape because of relaxation
+        bbox[bbox < 0] = 0
+        largest_dimension = [
+            int(x) if x <= data.shape[i] else data.shape[i]
+            for i, x in enumerate(bbox[1])
+        ]
+        bbox = np.array([bbox[0].tolist(), largest_dimension])
+
+        return bbox
+
+    def extract_bbox_region(
+        self, data: np.ndarray, bbox: np.ndarray
+    ):
+        new_region = data[
+            bbox[0][0] : bbox[1][0], bbox[0][1] : bbox[1][1], bbox[0][2] : bbox[1][2]
+        ]
+
+        return new_region
+
+    def __call__(self, data):
+        d = dict(data)
+        list(self.key_iterator(d))
+
+        bbox = self.calculate_bbox(d[self.on][0])
+        bbox_shape = np.subtract(bbox[1], bbox[0])
+        anisotrophy_flag = self.check_anisotrophy(d["image_meta_dict"]["pixdim"][1:4].tolist())
+        relaxation = self.calculate_relaxtion(
+            bbox_shape, anisotrophy_flag
+        )
+
+        final_bbox = self.relax_bbox(d[self.on][0], bbox, relaxation)
+        final_bbox_shape = np.subtract(final_bbox[1], final_bbox[0])
+        print(
+            f"EarlyCroppingd box at location: {final_bbox[0]} and {final_bbox[1]} \t shape after cropping: {final_bbox_shape}"
+        )
+        for key in self.keys:
+            if len(d[key].shape) == 4:
+                new_dkey = []
+                for idx in range(d[key].shape[0]):
+                    new_dkey.append(
+                        self.extract_bbox_region(d[key][idx], final_bbox)
+                    )
+                d[key] = np.stack(new_dkey, axis=0)
+                final_size = d[key].shape[1:]
+            else:
+                d[key] = self.extract_bbox_region(d[key], final_bbox)
+                final_size = d[key].shape
+
+            d[f"{key}_meta_dict"]["EarlyCroppingd_bbox"] = final_bbox
+
+        return d
+
+
 class OriginalSized(Transform):
     """
     Return the label to the original image shape
@@ -46,6 +173,7 @@ class OriginalSized(Transform):
         keep_key=None,
         label: bool = True,
         discreet: bool = True,
+        fast:bool = False,
         device=None,
     ) -> None:
         self.img_key = img_key
@@ -53,6 +181,7 @@ class OriginalSized(Transform):
         self.keep_key = keep_key
         self.label = label
         self.discreet = discreet
+        self.fast = fast
         self.device = device
         self.as_discrete = AsDiscrete(argmax=True)
 
@@ -134,31 +263,47 @@ class OriginalSized(Transform):
         for i, channel in enumerate(img):
             if self.label or self.discreet:
                 new_img.append(
-                    torch.tensor(
-                        resample_label(
-                            channel[None, :],
-                            meta["org_dim"],
-                            anisotrophy_flag=meta["anisotrophy_flag"],
-                        )[0],
-                        dtype=torch.float32,
-                        device=self.device,
-                    )
+                    resample_label(
+                        channel[None, :],
+                        meta["org_dim"],
+                        anisotrophy_flag=meta["anisotrophy_flag"],
+                    )[0]
                 )
             else:
                 new_img.append(
-                    torch.tensor(
-                        resample_image(
-                            channel[None, :],
-                            meta["org_dim"],
-                            anisotrophy_flag=meta["anisotrophy_flag"],
-                        )[0],
-                        dtype=torch.float32,
-                        device=self.device,
-                    )
+                    resample_image(
+                        channel[None, :],
+                        meta["org_dim"],
+                        anisotrophy_flag=meta["anisotrophy_flag"],
+                    )[0]
                 )
 
-        new_img = torch.stack(new_img, dim=0)
+        new_img = np.stack(new_img, axis=0)
 
+        if self.fast:
+            fast_box = meta["EarlyCroppingd_bbox"]
+            fast_padding = [
+                fast_box[0],
+                [
+                    fast_box[1][0] - meta["org_dim"][0],
+                    fast_box[1][1] - meta["org_dim"][1],
+                    fast_box[1][2] - meta["org_dim"][2],
+                ],
+            ]
+
+            # I think I should still check for the method...
+            new_img = np.pad(
+                new_img,
+                (
+                    (0, 0),
+                    (fast_padding[0][0], fast_padding[1][0]),
+                    (fast_padding[0][1], fast_padding[1][1]),
+                    (fast_padding[0][2], fast_padding[1][2]),
+                ),
+                constant_values=0,
+            )
+
+        new_img = torch.tensor(new_img, dtype=torch.float32, device=self.device)
         d[self.img_key] = MetaTensor(new_img, meta.get("original_affine"))
 
         meta_dict = d.get(f"{self.img_key}_meta_dict")
