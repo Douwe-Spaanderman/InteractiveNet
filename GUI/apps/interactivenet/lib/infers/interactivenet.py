@@ -36,8 +36,6 @@ from monai.transforms import (
     ToTensord,
     ToTensord,
     MeanEnsembled,
-    KeepLargestConnectedComponentd,
-    FillHolesd,
     SqueezeDimd,
 )
 
@@ -220,12 +218,11 @@ class InteractiveNet(InferTask):
                 OriginalSized(
                     img_key="label",
                     ref_meta="image",
+                    postprocess=True,
                     discreet=True,
                     fast=self.fast,
                     device=data.get("device") if data else None,
                 ),
-                KeepLargestConnectedComponentd(keys="label"),
-                FillHolesd(keys="label"),
                 SqueezeDimd(keys="label"),
             ]
         )

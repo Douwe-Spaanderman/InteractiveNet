@@ -21,6 +21,8 @@ from monai.transforms.transform import MapTransform, Transform
 from monai.transforms import (
     Flip,
     AsDiscrete,
+    KeepLargestConnectedComponent,
+    FillHoles,
 )
 from monai.data import MetaTensor
 import numpy as np
@@ -172,6 +174,7 @@ class OriginalSized(Transform):
         ref_meta,
         keep_key=None,
         label: bool = True,
+        postprocess: bool = False,
         discreet: bool = True,
         fast:bool = False,
         device=None,
@@ -180,10 +183,14 @@ class OriginalSized(Transform):
         self.ref_meta = ref_meta
         self.keep_key = keep_key
         self.label = label
+        self.postprocess = postprocess
         self.discreet = discreet
         self.fast = fast
         self.device = device
         self.as_discrete = AsDiscrete(argmax=True)
+
+        self.largestcomponent = KeepLargestConnectedComponent()
+        self.fillholes = FillHoles()
 
     def __call__(self, data):
         """
@@ -258,6 +265,12 @@ class OriginalSized(Transform):
 
         if self.discreet:
             img = self.as_discrete(img)
+
+        if self.discreet and self.postprocess:
+            img = self.largestcomponent(img)
+            img = self.fillholes(img)
+        elif self.postprocess:
+            raise KeyError("label is not discreet, so cannot do postprocessing...")
 
         new_img = []
         for i, channel in enumerate(img):
