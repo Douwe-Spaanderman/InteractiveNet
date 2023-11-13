@@ -46,9 +46,14 @@ class InteractiveNet(TaskConfig):
             task_dir = model_dir / conf["models"]
         metadata = read_metadata(task_dir / "plans.json")
 
-        # This should be somewhere in the plans.json file!
+        # This should be somewhere in the plans.json file! Or this should be an option when launching
         self.labels = {
-            "tumor": 1,
+            "tumor" : 1,
+            "metatase_1": 2,
+            "metatase_2": 3,
+            "metatase_3": 4,
+            "meta_4": 5,
+            "meta_5": 6,
         }
 
         self.median_shape = metadata["Fingerprint"]["Median size"]
