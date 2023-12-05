@@ -48,12 +48,19 @@ class InteractiveNet(TaskConfig):
 
         # This should be somewhere in the plans.json file! Or this should be an option when launching
         self.labels = {
-            "tumor" : 1,
-            "metatase_1": 2,
-            "metatase_2": 3,
-            "metatase_3": 4,
-            "meta_4": 5,
-            "meta_5": 6,
+            "metatase_1": 1,
+            "metatase_2": 2,
+            "metatase_3": 3,
+            "metatase_4": 4,
+            "metatase_5": 5,
+            "metatase_6": 6,
+            "metatase_7": 7,
+            "metatase_8": 8,
+            "new_metastase_1": 9,
+            "new_metastase_2": 10,
+            "new_metastase_3": 11,
+            "new_metastase_4": 12,
+            "new_metastase_5": 13,
         }
 
         self.median_shape = metadata["Fingerprint"]["Median size"]

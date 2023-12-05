@@ -423,7 +423,7 @@ class AnnotationToChanneld(MapTransform):
                     continue
 
                 annotation_map = torch.zeros(d[self.ref_image].shape)
-                if len(clicks) < 6 and self.method == "interactivenet":
+                if len(clicks) < 1 and self.method == "interactivenet":
                     raise KeyError("please provide 6 interactions")
 
                 for click in clicks:
