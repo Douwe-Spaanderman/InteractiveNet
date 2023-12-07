@@ -135,7 +135,8 @@ class InteractiveNet(InferTask):
                 [
                     EarlyCroppingd(
                         keys=["image", "interaction"],
-                        on="interaction"
+                        on="interaction",
+                        pixdim=self.target_spacing
                     ),
                 ]
             )

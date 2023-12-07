@@ -52,10 +52,12 @@ class EarlyCroppingd(MapTransform):
         self,
         keys: Union[str, List[str]],
         on: str,
+        pixdim: List[float],
     ) -> None:
         super().__init__(keys)
         self.keys = keys
         self.on = on
+        self.target_spacing = pixdim
 
     def check_anisotrophy(self, spacing: List[float]):
         def check(spacing):
