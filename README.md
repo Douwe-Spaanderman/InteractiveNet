@@ -40,19 +40,20 @@ This package is covered by the open source [APACHE 2.0 License](LICENSE).
 When using InteractiveNet, please cite the paper describing InteractiveNet as as follows:
 
 ```bibtex
-@article{spaanderman2023softtissuesegmentation,
-   title={Minimally Interactive Segmentation of Soft-Tissue Tumors on CT and MRI using Deep Learning}, 
-   author={Douwe J. Spaanderman, Martijn P. A. Starmans, Gonnie C. M. van Erp, David F. Hanff, Judith Sluijter, Anne-Rose W. Schut, Geert J. L. H. van Leenders, Cornelis Verhoef, Dirk J. Grünhagen, Wiro J. Niessen, Jacob J. Visser, and Stefan Klein},
-   year={2023},
-   note={Submitted},
+@article{spaanderman2024softtissuesegmentation,
+    title={Minimally Interactive Segmentation of Soft-Tissue Tumors on CT and MRI using Deep Learning}, 
+    author={Douwe J. Spaanderman and Martijn P. A. Starmans and Gonnie C. M. van Erp and David F. Hanff and Judith H. Sluijter and Anne-Rose W. Schut and Geert J. L. H. van Leenders and Cornelis Verhoef and Dirk J. Grunhagen and Wiro J. Niessen and Jacob J. Visser and Stefan Klein},
+    year={2024},
+    eprint={2402.07746},
+    archivePrefix={arXiv},
+    primaryClass={eess.IV}
 }
 
-@software{starmans2018worc,
+@software{spaanderman2023interactivenet,
   author       = {Douwe J. Spaanderman, Martijn P. A. Starmans and Stefan Klein},
   title        = {Interactivenet, an automatic configuring minimally interactive segmentation workflow},
   year         = {2023},
   publisher    = {Zenodo},
-  doi          = {10.5281/zenodo.8038683},
   url          = {https://github.com/Douwe-Spaanderman/InteractiveNet}
 }
 ```
