@@ -5,14 +5,14 @@ from setuptools import setup, find_packages
 
 setup(
     name='interactivenet',
-    version='0.2.0',
+    version='0.2.1',
     author = 'Biomedical Imaging Group Rotterdam (BIGR)',
     license='Apache License, Version 2.0',
     author_email='d.spaanderman@erasmusmc.nl',
     description='InteractiveNet, a framework for minimally interactive medical image segmentation.',
     #long_description=_description,
     url='https://github.com/Douwe-Spaanderman/InteractiveNet',
-    download_url = 'https://github.com/Douwe-Spaanderman/InteractiveNet/archive/refs/tags/v0.2.0.tar.gz',
+    download_url = 'https://github.com/Douwe-Spaanderman/InteractiveNet/archive/refs/tags/v0.2.1.tar.gz',
     packages=find_packages(include=['interactivenet', 'interactivenet.*']),
     python_requires='>3.9.0',
     install_requires=[
@@ -20,7 +20,7 @@ setup(
         "GeodisTK>=0.1.7",
         "matplotlib>=3.5.1",
         "mlflow>=1.24.0",
-        "monai>=1.0.0",
+        "monai>=1.0.0,<1.3.0",
         "nibabel>=3.2.2",
         "numpy>=1.22.3",
         "Pillow>=9.2.0",
