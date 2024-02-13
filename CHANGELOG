@@ -1,8 +1,20 @@
 # Change Log
 
-## Unreleased 
+## 0.2.2
+
+Released on February 13, 2024.
+
+### Fixed
+
+* Correct reference in README
+
+### Added
+
+* New faster preprocessing method for GUI. Previosly resampling was done prior to cropping. Now first a large cropping is done, followed by resampling and finally a tighter crop is done. This drastically speed up pre- and post-processing, especially for larger volumetric images with small objects of interest.
 
 ## 0.2.1
+
+Released on October 26, 2023.
 
 ### Fixed
 
