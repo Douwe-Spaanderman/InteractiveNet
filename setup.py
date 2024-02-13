@@ -6,13 +6,13 @@ from setuptools import setup, find_packages
 setup(
     name='interactivenet',
     version='0.2.2',
-    author = 'Biomedical Imaging Group Rotterdam (BIGR)',
+    author = 'Anonymized',
     license='Apache License, Version 2.0',
-    author_email='d.spaanderman@erasmusmc.nl',
+    author_email='Anonymized',
     description='InteractiveNet, a framework for minimally interactive medical image segmentation.',
     #long_description=_description,
-    url='https://github.com/Douwe-Spaanderman/InteractiveNet',
-    download_url = 'https://github.com/Douwe-Spaanderman/InteractiveNet/archive/refs/tags/v0.2.2.tar.gz',
+    url='Anonymized',
+    download_url = 'Anonymized',
     packages=find_packages(include=['interactivenet', 'interactivenet.*']),
     python_requires='>3.9.0',
     install_requires=[
