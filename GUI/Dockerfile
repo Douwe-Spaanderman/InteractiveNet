@@ -1,11 +1,7 @@
 # syntax=docker/dockerfile:1
-ARG MODELS="all"
-ARG PORT=8080
-ARG DATA="examples"
 
 # Installing neccessary packages
 FROM python:3.9 as base
-
 
 WORKDIR /app
 RUN git clone https://github.com/Douwe-Spaanderman/InteractiveNet && cd /app/InteractiveNet && git checkout development
@@ -23,7 +19,13 @@ RUN nvcc_version=$(nvcc --version | grep "release" | awk '{print $5}' | cut -d, 
 # Installing requirements
 RUN pip install numpy
 RUN cd /app/InteractiveNet/GUI && pip install -r requirements.txt
-ENV interactivenet_results="/app/InteractiveNet/apps/interactivenet/model"
+RUN pip install dicomweb-client[gcp]
+ENV interactivenet_results="/app/InteractiveNet/GUI/apps/interactivenet/model"
 RUN interactivenet_download_model -t all
     
-CMD ["monailabel", "start_server", "--app", "/app/InteractiveNet/GUI/apps/interactivenet", "--studies", "http://orthanc:8042/dicom-web/", "--conf", "models", "Task800_WORC_MRI", "--port", "8000"]
+# Optional arguments
+ENV models="all"
+ENV port="8080"
+ENV studies="/app/InteractiveNet/GUI/examples"
+
+CMD monailabel start_server --app /app/InteractiveNet/GUI/apps/interactivenet --studies $studies --conf models $models --port $port --host 0.0.0.0
