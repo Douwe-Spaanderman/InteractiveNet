@@ -82,7 +82,7 @@ def download_install(task:str, models:dict):
     url = models[task]['url']
 
     print("Downloading files")
-    local = results / url.split('/')[-1]
+    local = results / url.split('/')[-1].split('?')[0]
     with requests.get(url, stream=True) as r:
         r.raise_for_status()
         with open(str(local), 'wb') as f:
